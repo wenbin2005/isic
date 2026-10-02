@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101c16">
+  <meta name="description" content="走進森林、海岸、秋日與雪林。無限電影館，給自己一段不必趕路的時間。">
+  <title>無限電影館 · 把片刻交給自然</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <a class="skip" href="#explore">跳至景色探索</a>
+  <header class="header">
+    <a class="brand" href="#" aria-label="無限電影館首頁"><svg viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M20 5 6 29h28L20 5Z" stroke="currentColor" stroke-width="1.3"/><path d="m20 12-10 17m10-17 10 17M20 5v30M6 29h28" stroke="currentColor" stroke-width="1.1"/></svg><span>無限電影館<small>讓心，有一處可以漫步</small></span></a>
+    <nav aria-label="主選單"><a href="#explore" class="nav-active">景色探索</a><button id="breath-open">呼吸練習</button><button id="about-open">關於電影館</button></nav>
+    <button class="header-sound" id="header-sound" aria-pressed="false"><span class="sound-mark" aria-hidden="true">♫</span><span id="header-sound-label">開啟自然音</span><span class="sound-dot" aria-hidden="true"></span></button>
+  </header>
+  <main>
+    <section class="intro"><div class="eyebrow"><span></span> 一場不必遠行的旅行</div><span class="intro-note">此刻，沒有什麼比好好休息更重要。</span></section>
+    <section class="cinema" id="cinema" aria-label="自然景色播放器" tabindex="0">
+      <div class="landscape" id="landscape"><img id="scene-image" src="./assets/forest.png" alt="陽光穿過綠色森林，照亮苔蘚與蜿蜒步道" fetchpriority="high"><canvas id="atmosphere" aria-hidden="true"></canvas><canvas id="particles" aria-hidden="true"></canvas></div>
+      <div class="shade"></div>
+      <div class="hero-top"><span class="scene-pill"><i></i> <span id="scene-tag">森林漫步</span> <span class="pill-divider">|</span> 沉浸音景</span><button class="icon-button" id="favorite" aria-label="收藏森林漫步" aria-pressed="false">♡</button></div>
+      <div class="hero-copy"><span class="hero-kicker">給忙碌的你，一點留白</span><h1>暫時離線，<br>把自己交給自然。</h1><p>不用抵達哪裡，也不用完成什麼。<br>跟著風、光與樹影，慢慢找回自己的節奏。</p><button class="primary" id="start"><span class="play-symbol">▶</span> 開始這段漫步 <span class="arrow">↗</span></button><div class="hero-footnote">戴上耳機，讓世界安靜一點。</div></div>
+      <div class="hero-bottom"><div class="scene-meta"><span class="meta-no" id="scene-number">01 / 04</span><div><strong id="scene-title">光落下的森林</strong><small id="scene-description">在層層綠意之間，走一段沒有目的的路。</small></div></div><button class="explore-hint" id="explore-mode"><span aria-hidden="true">⤢</span> 沉浸探索 <span class="hint-arrow">→</span></button></div>
+      <div class="immersion-help" id="immersion-help" hidden><span>移動游標或輕拖畫面探索 · 方向鍵調整視線 · Esc 返回</span><button id="leave-immersion">返回電影館</button></div>
+      <div class="immersion-controls" id="immersion-controls" hidden><button id="immersive-play" aria-label="暫停景色">Ⅱ 暫停</button><button id="immersive-sound" aria-pressed="false">♫ 開啟自然音</button><label><span class="sr-only">沉浸休息計時</span><select id="immersive-timer" aria-label="沉浸休息計時"><option value="0">自由停留</option><option value="5">休息 5 分鐘</option><option value="10">休息 10 分鐘</option><option value="20">休息 20 分鐘</option></select></label></div>
+      <div class="progress"><div id="progress-fill"></div></div>
+    </section>
+    <section class="collection" id="explore"><div class="section-title"><div><span class="eyebrow">隨心選一處，停留一下</span><h2>你想去哪裡，喘口氣？</h2></div><span class="collection-note">四種風景，四種慢下來的方式 <span>↙</span></span></div>
+      <div class="scene-grid" role="group" aria-label="選擇自然景色">
+        <button class="scene-card active" data-scene="forest" aria-pressed="true"><div class="card-image"><img src="./assets/forest.png" alt="光影交錯的綠色森林步道"><span class="card-number">01</span><span class="card-state">正在播放 <i></i></span><span class="card-play">↗</span></div><div class="card-label"><div><h3>森林漫步</h3><p>樹影搖曳，心也跟著鬆開。</p></div><span class="card-duration">綠意 · 鳥鳴</span></div></button>
+        <button class="scene-card" data-scene="ocean" aria-pressed="false"><div class="card-image"><img src="./assets/ocean.png" alt="大西洋海岸的藍色浪潮" loading="lazy"><span class="card-number">02</span><span class="card-state">正在播放 <i></i></span><span class="card-play">↗</span></div><div class="card-label"><div><h3>大西洋波浪</h3><p>把心事，交給下一個浪。</p></div><span class="card-duration">潮汐 · 海風</span></div></button>
+        <button class="scene-card" data-scene="autumn" aria-pressed="false"><div class="card-image"><img src="./assets/autumn.png" alt="金黃色秋葉覆蓋的林間步道" loading="lazy"><span class="card-number">03</span><span class="card-state">正在播放 <i></i></span><span class="card-play">↗</span></div><div class="card-label"><div><h3>秋天落葉</h3><p>學著像葉子一樣，輕輕放下。</p></div><span class="card-duration">暖光 · 葉語</span></div></button>
+        <button class="scene-card" data-scene="snow" aria-pressed="false"><div class="card-image"><img src="./assets/snow.png" alt="白雪覆蓋的寧靜松林" loading="lazy"><span class="card-number">04</span><span class="card-state">正在播放 <i></i></span><span class="card-play">↗</span></div><div class="card-label"><div><h3>靜謐雪景</h3><p>世界輕了，只剩呼吸的聲音。</p></div><span class="card-duration">飄雪 · 寂靜</span></div></button>
+      </div>
+    </section>
+    <section class="rest-note"><span class="line-leaf" aria-hidden="true">❧</span><p>有時候，最好的前進，是先停一下。</p><span>在這裡，你可以什麼都不做。</span><button id="breath-mobile">一起練習呼吸 ↗</button></section>
+  </main>
+  <footer><span>無限電影館 <span class="footer-dot">·</span> 給生活一點呼吸的空間</span><button id="source-open">關於影像與音景 ↗</button></footer>
+  <div class="control-bar" aria-label="播放控制"><div class="now-playing"><img id="mini-image" src="./assets/forest.png" alt=""><div><strong id="mini-title">森林漫步</strong><span id="play-status">準備好，就慢慢出發</span></div></div><div class="play-controls"><button class="icon-button" id="previous" aria-label="上一個景色">↤</button><button class="play-toggle" id="play" aria-label="暫停" aria-pressed="true">Ⅱ</button><button class="icon-button" id="next" aria-label="下一個景色">↦</button><span class="time-label" id="time">00:00 <span>/ 無限循環</span></span></div><div class="extra-controls"><button class="icon-button" id="sound" aria-label="開啟自然音" aria-pressed="false">♫</button><label class="volume-label"><span class="sr-only">音量</span><input id="volume" type="range" min="0" max="100" value="45"></label><span class="control-divider"></span><label class="timer-label"><span aria-hidden="true">◷</span><span class="sr-only">休息計時</span><select id="timer" aria-label="休息計時"><option value="0">自由停留</option><option value="5">休息 5 分鐘</option><option value="10">休息 10 分鐘</option><option value="20">休息 20 分鐘</option></select></label><button class="icon-button" id="fullscreen" aria-label="全螢幕">⛶</button></div></div>
+  <dialog id="breath-dialog" aria-labelledby="breath-title"><button class="dialog-close" aria-label="關閉呼吸練習">×</button><span class="eyebrow">跟著光圈，慢慢呼吸</span><h2 id="breath-title">把注意力，帶回此刻。</h2><div class="breath-visual"><div class="breath-ring"></div><div class="breath-inner"><strong id="breath-phase">準備好了嗎？</strong><span id="breath-count">依照舒服的節奏就好</span></div></div><p>吸氣 4 秒，再緩緩吐氣 6 秒。<br>不用屏息，也不必勉強。</p><button class="primary" id="breath-start">開始呼吸練習</button></dialog>
+  <dialog id="about-dialog" aria-labelledby="about-title"><button class="dialog-close" aria-label="關閉說明">×</button><span class="eyebrow">一處隨時可以回來的地方</span><h2 id="about-title">無限電影館</h2><p>森林、大西洋海岸、秋天落葉與雪景。為需要喘息，卻無法真正外出散步的時刻，留一扇通往自然的窗。</p><p>選一個景色，移動游標或輕拖畫面調整視線；也可以用方向鍵探索。聲音預設關閉，開啟後可調整音量。設定休息時間，時間到了便會暫停。</p><p class="source-note">影像為 AI 生成的自然景色，以視線移動、WebGL 光霧與粒子營造動態；音景由瀏覽器合成。這不是實地錄製的影片或 360° 全景。收藏僅儲存在這台裝置。</p></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="./app.js"></script>
+</body>
+</html>

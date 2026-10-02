@@ -1,0 +1,12 @@
+{
+  "asset": "autumn_field_puresky",
+  "kind": "hdri",
+  "resolution": "1k",
+  "filename": "sky.hdr",
+  "url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/autumn_field_puresky_1k.hdr",
+  "bytes": 1092974,
+  "md5": "f9a6bd6d95a55e2d677b8a84b7f53673",
+  "sha256": "e60470d3a0f219585df1d74c393b472361c5400a7ff8d071ebe6eca29b7fe2b0",
+  "mime": "application/octet-stream",
+  "magic": "233f52414449414e43450a464f524d41"
+}

@@ -1,0 +1,12 @@
+{
+  "asset": "bark_brown_01",
+  "kind": "Diffuse",
+  "resolution": "1k",
+  "filename": "bark.jpg",
+  "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_01/bark_brown_01_diff_1k.jpg",
+  "bytes": 729893,
+  "md5": "b6d5dcde10b7cd1b36d70cd33a34724a",
+  "sha256": "4213441aebcb72b9911f5a860e9ce74a61a8f6ce3b9c23d1f204173e7e7f6066",
+  "mime": "image/jpeg",
+  "magic": "ffd8ffe0"
+}

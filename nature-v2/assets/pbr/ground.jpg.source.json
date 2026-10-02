@@ -1,0 +1,12 @@
+{
+  "asset": "forest_ground_04",
+  "kind": "Diffuse",
+  "resolution": "1k",
+  "filename": "ground.jpg",
+  "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_ground_04/forest_ground_04_diff_1k.jpg",
+  "bytes": 1113899,
+  "md5": "6ad9df4d731a238299806f739a26af83",
+  "sha256": "50a4dda30875020c64385261aa7e00e2155b592302fa6794165f58fae73cbd2c",
+  "mime": "image/jpeg",
+  "magic": "ffd8ffe0"
+}

@@ -1,0 +1,12 @@
+{
+  "asset": "dark_rock",
+  "kind": "nor_gl",
+  "resolution": "1k",
+  "filename": "rock-normal.jpg",
+  "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/dark_rock/dark_rock_nor_gl_1k.jpg",
+  "bytes": 1006770,
+  "md5": "ec29e852e783b353c06b630121f5d61c",
+  "sha256": "0693d68d1a01b07389c7db22f56f9519ef572135bc2c1e59afbcdb6f52130fcc",
+  "mime": "image/jpeg",
+  "magic": "ffd8ffe0"
+}

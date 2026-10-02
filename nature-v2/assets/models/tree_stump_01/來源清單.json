@@ -1,0 +1,52 @@
+{
+  "asset": "tree_stump_01",
+  "metadata": "https://api.polyhaven.com/files/tree_stump_01",
+  "entry": "tree_stump_01_1k.gltf",
+  "files": [
+    {
+      "filename": "tree_stump_01_1k.gltf",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/tree_stump_01/tree_stump_01_1k.gltf",
+      "bytes": 2793,
+      "md5": "fedfc620634a8dbaf6345413b13abe1a",
+      "sha256": "9c66ba87d693f35eb404acaa96e0eeff831c295b61a0a903795584cbcc3527c9",
+      "mime": "model/gltf+json"
+    },
+    {
+      "filename": "tree_stump_01.bin",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/tree_stump_01/tree_stump_01.bin",
+      "bytes": 965380,
+      "md5": "acb292727949126b92e58217fd50fca9",
+      "sha256": "b4d9ca70b3c908c4a638fbd6a23ed96c84055bbbf14cf44b89e31ad59fa21e0a",
+      "mime": "application/octet-stream"
+    },
+    {
+      "filename": "textures/tree_stump_01_diff_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/tree_stump_01/tree_stump_01_diff_1k.jpg",
+      "bytes": 907451,
+      "md5": "c71fe60400276a37b8847048cbec3720",
+      "sha256": "781ebe420ac4d84f2e44b9e9937a596e3d5d90711d978a1392f8bf3771b5bf31",
+      "mime": "image/jpeg"
+    },
+    {
+      "filename": "textures/tree_stump_01_nor_gl_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/tree_stump_01/tree_stump_01_nor_gl_1k.jpg",
+      "bytes": 1238404,
+      "md5": "cc2a3c6e4682a521b15cccc61a416bbf",
+      "sha256": "425117514b0386bb6df41cb64a61a624d2596472e05777483d4021b3285e3ceb",
+      "mime": "image/jpeg"
+    },
+    {
+      "filename": "textures/tree_stump_01_arm_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/tree_stump_01/tree_stump_01_arm_1k.jpg",
+      "bytes": 825646,
+      "md5": "09b7aa228dccb93f5cf4188ba5530578",
+      "sha256": "d845cd6ab45288c546267d059ebe1f8a737e174330fe9375e5f99e753f2f95d8",
+      "mime": "image/jpeg"
+    }
+  ],
+  "bytes": 3939674,
+  "meshes": 1,
+  "triangles": 41046,
+  "relativeReferences": 4,
+  "verification": "官方MD5/大小、相對URI落地、buffer.byteLength與三角數皆已核對"
+}
