@@ -1,0 +1,12 @@
+{
+  "asset": "coast_sand_01",
+  "kind": "Diffuse",
+  "resolution": "1k",
+  "filename": "sand.jpg",
+  "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/coast_sand_01/coast_sand_01_diff_1k.jpg",
+  "bytes": 960614,
+  "md5": "a1e243fc8635806381505c7dc44b192a",
+  "sha256": "58af2e40100f7f405703a86d593af64379f822c4786850def23ecfc921450d54",
+  "mime": "image/jpeg",
+  "magic": "ffd8ffe0"
+}

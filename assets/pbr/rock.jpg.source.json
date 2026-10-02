@@ -1,0 +1,12 @@
+{
+  "asset": "dark_rock",
+  "kind": "Diffuse",
+  "resolution": "1k",
+  "filename": "rock.jpg",
+  "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/dark_rock/dark_rock_diff_1k.jpg",
+  "bytes": 533128,
+  "md5": "ee1bf662b14c31830e0683197f6a4c65",
+  "sha256": "7e1148b1749b2200de463b943d4c8994bb24467c96418aa3c283bf65c30e7300",
+  "mime": "image/jpeg",
+  "magic": "ffd8ffe0"
+}

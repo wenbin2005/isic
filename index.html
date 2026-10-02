@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101c16">
+  <meta name="description" content="走進四個可自由漫步的自然空間。森林、海岸、秋林與雪林，讓生活多一點呼吸。">
+  <title>無限電影館 · 自然漫遊</title>
+  <link rel="icon" href="./classic/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+</head>
+<body>
+  <a class="skip" href="#stage">跳至自然場景</a>
+  <header class="header"><a class="brand" href="./"><svg viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M20 5 6 29h28L20 5Z M20 5v30 M20 12 10 29 M20 12 30 29" stroke="currentColor" stroke-width="1.1"/></svg><span>無限電影館<small>把片刻，交給自然</small></span></a><nav aria-label="主選單"><a href="#scenes">四季漫遊</a><button id="guide-open">漫步指南</button></nav><div class="header-actions"><span class="version">可行走 3D 新版</span><button id="choose-static" class="outline">靜態版 ↗</button></div></header>
+  <main id="three-content">
+    <div class="intro"><span><i></i> 不必遠行，也可以走進自然</span><span>這一次，風景就在你的腳下。</span></div>
+    <section class="stage" id="stage" aria-label="可行走的自然場景" tabindex="0">
+      <div class="loading-backdrop"></div><canvas id="world" aria-label="第一人稱 3D 自然景色"></canvas><div class="vignette"></div>
+      <div class="stage-top"><span class="location-pill"><i></i><span id="scene-label">森林漫步</span><span class="pill-line"></span>自由探索</span><div class="quality-label"><i></i><span id="quality-label">正在準備自然場景</span></div></div>
+      <div class="hero-copy" id="hero-copy"><span class="eyebrow">留一段沒有目的的路，給自己</span><h1>不只看見自然，<br>這次，走進去。</h1><p>沿著林間小徑，或在海風裡慢慢走。<br>沒有任務，沒有終點。只有你與此刻。</p><button id="enter" class="primary" disabled><span>▶</span><span id="enter-label">正在準備景色</span><span>↗</span></button><small>用方向鍵／WASD 漫步，輕拖畫面轉頭。</small></div>
+      <div class="loading-note" id="loading-note" role="status">正在鋪好步道、讓光落進樹林…</div>
+      <div class="aim" id="aim" hidden aria-hidden="true"></div>
+      <div class="walk-hint" id="walk-hint" hidden><span>WASD／方向鍵移動 · 拖曳轉頭 · Esc 回到電影館</span><button id="leave">結束漫步 ↗</button></div>
+      <div class="scene-caption"><span id="scene-no">01 / 04</span><div><strong id="scene-title">光落下的森林</strong><small id="scene-subtitle">走在苔蘚與樹影之間，讓心慢慢鬆開。</small></div><button id="expand" aria-label="全螢幕探索">⛶</button></div>
+      <div class="touch-controls" id="touch-controls" hidden><div class="dpad" role="group" aria-label="移動方向"><button data-move="forward" aria-label="向前走">↑</button><button data-move="left" aria-label="向左走">←</button><button data-move="backward" aria-label="向後走">↓</button><button data-move="right" aria-label="向右走">→</button></div><span>在右側輕拖，轉頭看風景</span></div>
+      <div class="walking-controls" id="walking-controls" hidden><button id="walk-play">Ⅱ 暫停</button><button id="walk-sound" aria-pressed="false">♫ 開啟音景</button><button id="recenter">⌖ 回到起點</button><label><span class="sr-only">畫質</span><select id="quality"><option value="high">細緻畫質</option><option value="balanced">流暢畫質</option></select></label></div>
+    </section>
+    <section id="scenes" class="collection"><div class="section-heading"><div><span class="eyebrow">選一處景色，讓腳步慢下來</span><h2>今天，想走進哪裡？</h2></div><span>四種景色，同一份安靜。 ↙</span></div><div class="scene-grid" role="group" aria-label="選擇 3D 場景">
+      <button class="scene-card selected" data-scene="forest" aria-pressed="true"><div><img src="./classic/assets/forest.png" alt="森林漫步的自然景色" loading="lazy"><span>01</span><i>正在停留</i><b>↗</b></div><h3>森林漫步 <span>綠意 · 林蔭步道</span></h3><p>穿過樹影，走近流動的光。</p></button>
+      <button class="scene-card" data-scene="ocean" aria-pressed="false"><div><img src="./classic/assets/ocean.png" alt="大西洋海岸自然景色" loading="lazy"><span>02</span><i>正在停留</i><b>↗</b></div><h3>大西洋波浪 <span>海風 · 岩岸漫步</span></h3><p>沿著海岸，把心事交給潮汐。</p></button>
+      <button class="scene-card" data-scene="autumn" aria-pressed="false"><div><img src="./classic/assets/autumn.png" alt="金橙色秋林自然景色" loading="lazy"><span>03</span><i>正在停留</i><b>↗</b></div><h3>秋天落葉 <span>暖光 · 金色林徑</span></h3><p>學著像葉子一樣，輕輕放下。</p></button>
+      <button class="scene-card" data-scene="snow" aria-pressed="false"><div><img src="./classic/assets/snow.png" alt="靜謐雪林自然景色" loading="lazy"><span>04</span><i>正在停留</i><b>↗</b></div><h3>靜謐雪景 <span>飄雪 · 松林步道</span></h3><p>在潔白之間，只聽自己的呼吸。</p></button>
+    </div></section>
+    <div class="rest-note"><span>❧</span><p>不必走得很遠，能慢下來就很好。</p><button id="breath-open">一起練習呼吸 ↗</button><button id="guide-inline">漫步指南 ↗</button></div>
+    <footer><span>無限電影館 · 自然漫遊</span><button id="source-open">關於景色與素材 ↗</button></footer>
+    <div class="statusbar"><div><span class="status-leaf">❧</span><span id="status">正在準備第一段漫步</span></div><div><span id="distance">已漫步 0 公尺</span><span class="divider"></span><span id="fps">自適應畫質</span><button id="sound" aria-pressed="false">♫ 開啟音景</button></div></div>
+  </main>
+  <section id="classic-content" hidden aria-label="原版靜態自然體驗"><div class="fallback-banner"><div><strong>原版靜態體驗</strong><span id="fallback-reason">讓景色保持流暢，安心放鬆。</span></div><button id="try-three" class="outline">試試 3D 漫遊 ↗</button></div><iframe id="classic-frame" title="無限電影館原版靜態體驗" allow="autoplay; fullscreen"></iframe></section>
+  <dialog id="guide-dialog" aria-labelledby="guide-title"><button class="close-dialog" aria-label="關閉漫步指南">×</button><span class="eyebrow">不必熟悉遊戲，也能慢慢出發</span><h2 id="guide-title">你的自然漫步指南</h2><div class="guide-list"><p><strong>電腦</strong>方向鍵或 WASD 行走，拖曳景色轉頭；點「全螢幕探索」可放大景色。按 Esc 或「結束漫步」返回。</p><p><strong>手機</strong>左下方方向按鈕行走，右側畫面輕拖轉頭。旋轉手機可看見更寬的景色。</p><p><strong>安心停留</strong>沒有任務或闖關。可暫停、回到起點；景色範圍與碰撞邊界會保護你留在可行走地形。</p><p><strong>流暢優先</strong>偵測到效能不足會先降低畫質，再切回保留的原版靜態體驗。隨時可手動選擇「靜態版」。</p></div></dialog>
+  <dialog id="source-dialog" aria-labelledby="source-title"><button class="close-dialog" aria-label="關閉素材說明">×</button><span class="eyebrow">光、材質與真實空間</span><h2 id="source-title">一扇重新建造的自然之窗</h2><p>四景皆為可行走的即時 3D 重建，以自然材質、立體景物、光影與霧營造寫實感；並非實地錄影或原照片完整重現。卡片使用原版 AI 景色作為意境預覽，實際漫遊畫面以 3D 場景為準。</p><p>自然材質採用 Poly Haven 的 CC0 素材。音景由瀏覽器合成；不會自動播放聲音，也不會上傳裝置效能資料。</p><p>如果裝置不適合 3D，會使用完整保留的原版靜態體驗。</p></dialog>
+  <dialog id="breath-dialog" aria-labelledby="breath-title"><button class="close-dialog" aria-label="關閉呼吸練習">×</button><span class="eyebrow">給呼吸，一點空間</span><h2 id="breath-title">把注意力帶回此刻</h2><div class="breath-visual"><div class="breath-ring"></div><div><strong id="breath-phase">準備好了嗎？</strong><span id="breath-count">依照舒服的節奏就好</span></div></div><p>吸氣 4 秒，緩緩吐氣 6 秒。<br>不用屏息，也不必勉強。</p><button id="breath-start" class="primary">開始呼吸練習</button></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
