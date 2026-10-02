@@ -129,7 +129,9 @@ document.querySelectorAll('[data-scene]').forEach(button => button.onclick = () 
 
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && exploring && !document.fullscreenElement) leaveWalk();
-  if (!exploring || document.querySelector('dialog[open]') || event.target.closest('select,button,input')) return;
+  if (!exploring || document.querySelector('dialog[open]') || event.target.closest('select,input')) return;
+  // 按過控制列按鈕後焦點留在按鈕上：移動鍵仍要能走路，空白鍵則交還給按鈕本身。
+  if (event.target.closest('button') && !keyMap[event.code]) return;
   if (event.code === 'Space') { event.preventDefault(); running = !running; updateRunning(); return; }
   if (!running) return;
   if (keyMap[event.code]) { event.preventDefault(); input[keyMap[event.code]] = true; explorer?.setInput(input); }

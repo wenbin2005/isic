@@ -726,7 +726,8 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
     currentScene = key;
     const tier = TIERS[currentQuality];
     const rand = randomSeed(key === 'forest' ? 481 : key === 'ocean' ? 925 : key === 'autumn' ? 391 : 808);
-    scene.fog = new THREE.Fog(key === 'ocean' ? '#bbced0' : key === 'snow' ? '#c6d5da' : key === 'autumn' ? '#a3a58d' : '#939f91', key === 'ocean' ? 64 : 30, key === 'ocean' ? 235 : key === 'snow' ? 110 : 154);
+    // 地面只鋪到 ±67 公尺：霧的終點要落在世界邊緣之前，遠景才會融進天色而不是露出地板盡頭。
+    scene.fog = new THREE.Fog(key === 'ocean' ? '#bbced0' : key === 'snow' ? '#c6d5da' : key === 'autumn' ? '#a9a79b' : '#8496a0', key === 'ocean' ? 64 : key === 'snow' ? 22 : 26, key === 'ocean' ? 235 : key === 'snow' ? 90 : 112);
     scene.background = hdrTexture;
     scene.backgroundIntensity = 0.92;
     scene.backgroundRotation.set(0, key === 'ocean' ? 0.9 : -0.35, 0);
