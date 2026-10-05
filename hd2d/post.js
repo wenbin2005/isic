@@ -109,6 +109,7 @@ export class HD2DPost {
     // 移軸景深：先水平、再垂直
     this.tilt.uniforms.focusY.value = opts.focusY;
     this.tilt.uniforms.maxBlur.value = opts.blur;
+    this.tilt.uniforms.band.value = opts.band ?? 0.1;
     this.tilt.uniforms.dir.value.set(1 / w, 0); this.pass(this.tilt, this.rtScene, this.rtA);
     this.tilt.uniforms.dir.value.set(0, 1 / h); this.pass(this.tilt, this.rtA, this.rtB);
     const u = this.comp.uniforms;

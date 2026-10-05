@@ -11,7 +11,7 @@ export function rng(seed) {
   };
 }
 
-function canvas(w, h) {
+export function canvas(w, h) {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   c.getContext('2d', { willReadFrequently: true }); // 描邊需要反覆讀取像素
@@ -37,7 +37,7 @@ function toTexture(c, repeat = true) {
 }
 
 // 透明像素若緊鄰不透明像素就塗上深色描邊，形成像素角色的輪廓。
-function outline(ctx, x0, y0, w, h, color = [28, 20, 36]) {
+export function outline(ctx, x0, y0, w, h, color = [28, 20, 36]) {
   const img = ctx.getImageData(x0, y0, w, h);
   const d = img.data, src = new Uint8ClampedArray(d);
   const a = (x, y) => (x < 0 || y < 0 || x >= w || y >= h) ? 0 : src[(y * w + x) * 4 + 3];
@@ -179,6 +179,30 @@ function water(r) {
 
 function plain(r, colors) { const c = canvas(16, 16); speckle(c.getContext('2d'), 16, 16, colors, r); return c; }
 
+// 霧之森的地面：較暗的草地，散落落葉
+function forestTop(r) {
+  const c = canvas(16, 16), g = c.getContext('2d');
+  speckle(g, 16, 16, ['#2f4a2c', '#36532f', '#2a4228', '#3a5a33', '#314d2d'], r);
+  for (let i = 0; i < 5; i++) dot(g, Math.floor(r() * 16), Math.floor(r() * 15), '#4d7040', 1, 2);
+  for (let i = 0; i < 4; i++) dot(g, Math.floor(r() * 15), Math.floor(r() * 16), pick(r, ['#7a5a32', '#8a6a3a', '#6a4a2a']), 2, 1);
+  return c;
+}
+
+// 古塔遺跡的石板：大塊石磚、裂縫與青苔
+function ruinTop(r) {
+  const c = canvas(16, 16), g = c.getContext('2d');
+  g.fillStyle = '#2b2a33'; g.fillRect(0, 0, 16, 16);
+  for (const [x, y, w, h] of [[0, 0, 8, 8], [8, 0, 8, 5], [8, 5, 8, 6], [0, 8, 5, 8], [5, 8, 11, 8]]) {
+    g.fillStyle = pick(r, ['#5d5b66', '#55535d', '#64626c', '#4e4c57', '#605a58']);
+    g.fillRect(x + 1, y + 1, w - 1, h - 1);
+    dot(g, x + 1, y + 1, '#75737e', w - 2, 1);
+    for (let k = 0; k < 3; k++) dot(g, x + 1 + Math.floor(r() * (w - 1)), y + 1 + Math.floor(r() * (h - 1)), pick(r, ['#4a4852', '#6a6874']));
+  }
+  for (let i = 0; i < 5; i++) dot(g, Math.floor(r() * 16), Math.floor(r() * 16), pick(r, ['#4f6a3e', '#5c7a46']), 2, 1);
+  for (let i = 0; i < 2; i++) { let x = Math.floor(r() * 16), y = Math.floor(r() * 10); for (let k = 0; k < 4; k++) { dot(g, x, y, '#3a3948'); x += r() > 0.5 ? 1 : -1; y++; } }
+  return c;
+}
+
 export function makeTileTextures() {
   const r = rng(20261005);
   const t = {
@@ -189,7 +213,8 @@ export function makeTileTextures() {
     roofGreen: roof(r, '#4f7350', '#37543a', '#6a9168'),
     water: water(r), wood: plain(r, ['#6e4b30', '#5f402a', '#7a5537', '#684730']),
     white: plain(r, ['#ece8df', '#e2ddd2', '#e8e3d9']), red: plain(r, ['#b13b32', '#a3352d', '#b8423a']),
-    shrine: plain(r, ['#c4402f', '#b83a2b', '#cc4a37']), dark: plain(r, ['#2e2b33', '#36323b'])
+    shrine: plain(r, ['#c4402f', '#b83a2b', '#cc4a37']), dark: plain(r, ['#2e2b33', '#36323b']),
+    forestTop: forestTop(r), ruinTop: ruinTop(r), cloth: plain(r, ['#c9b48a', '#bda67c', '#d2bf96'])
   };
   const out = {};
   for (const k in t) out[k] = toTexture(t[k]);
@@ -252,6 +277,34 @@ function signboard() {
   return c;
 }
 
+// 發光蘑菇（霧之森的照明，發光部分另外當自發光貼圖）
+function mushroom(r) {
+  const c = canvas(16, 16), g = c.getContext('2d');
+  for (const [x, h, w] of [[4, 7, 5], [10, 5, 4], [7, 4, 3]]) {
+    dot(g, x + Math.floor(w / 2) - 1, 16 - h, '#d8d0bc', 2, h);
+    dot(g, x - 1, 16 - h - 2, '#5fe0d0', w + 2, 2); dot(g, x, 16 - h - 3, '#9ff8ea', w, 1);
+    dot(g, x, 16 - h - 1, '#2a8a88', w, 1);
+  }
+  outline(g, 0, 0, 16, 16);
+  return c;
+}
+
+// 擋住北門的黑色荊棘
+function bramble(r) {
+  const c = canvas(32, 24), g = c.getContext('2d');
+  for (let i = 0; i < 9; i++) {
+    let x = 2 + r() * 28, y = 24;
+    const dx = (r() - 0.5) * 1.2, len = 10 + r() * 12;
+    for (let k = 0; k < len; k++) {
+      dot(g, Math.floor(x), Math.floor(y), pick(r, ['#2a1830', '#3a2242', '#4a2c52']));
+      if (k % 3 === 0) dot(g, Math.floor(x) + (r() > 0.5 ? 1 : -1), Math.floor(y), '#6a3a6a');
+      x += dx + (r() - 0.5); y -= 1;
+    }
+  }
+  outline(g, 0, 0, 32, 24, [12, 6, 16]);
+  return c;
+}
+
 function grassTuft(r) {
   const c = canvas(16, 8), g = c.getContext('2d');
   for (let i = 0; i < 9; i++) { const x = 1 + Math.floor(r() * 14), h = 3 + Math.floor(r() * 5); dot(g, x, 8 - h, pick(r, ['#5f8f45', '#79ad55', '#4e7b3a']), 1, h); }
@@ -260,7 +313,7 @@ function grassTuft(r) {
 
 export function makeSpriteTextures() {
   const r = rng(77);
-  const s = { tree: broadleaf(r), tree2: broadleaf(r), pine: pine(r), bush: bush(r), sign: signboard(), tuft: grassTuft(r) };
+  const s = { tree: broadleaf(r), tree2: broadleaf(r), pine: pine(r), bush: bush(r), sign: signboard(), tuft: grassTuft(r), mushroom: mushroom(r), bramble: bramble(r) };
   const out = {};
   for (const k in s) { out[k] = toTexture(s[k], false); out[k].minFilter = THREE.NearestFilter; out[k].generateMipmaps = false; }
   return out;

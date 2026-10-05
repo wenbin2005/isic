@@ -2,18 +2,28 @@
 import * as THREE from 'three';
 import { makeTileTextures, makeSpriteTextures, rng } from './pixel.js';
 
-export const W = 40, H = 32;
+// 地圖：x 0..W-1；z 從 ZMIN 到 H-1。z ≥ 0 是星燈港，z < 0 是北方的霧之森（-1..-21）與星之古塔（-22 以北）。
+// 列以物件存放（T[z][x]），所以負的 z 也能直接當索引。
+export const W = 40, H = 32, ZMIN = -36;
 export const SPRITE_TILT = -0.35; // 精靈板向後傾，抵銷俯視造成的縮短感
 const WATER_Y = -0.55;
 
-const TOP = { grass: 'grassTop', flower: 'flowerTop', path: 'pathTop', plaza: 'plazaTop', sand: 'sandTop', rock: 'rockTop', plank: 'plankTop', stairs: 'plazaTop', high: 'grassTop' };
-const SIDE = { grass: 'grassSide', flower: 'grassSide', path: 'grassSide', plaza: 'stone', sand: 'sandSide', rock: 'rockSide', plank: 'plankSide', stairs: 'stone', high: 'grassSide' };
-const BASE_H = { grass: 0, flower: 0, path: 0, plaza: 0.08, sand: -0.22, rock: 0.5, plank: 0, stairs: 0.5, high: 1.0 };
+const TOP = { grass: 'grassTop', flower: 'flowerTop', path: 'pathTop', plaza: 'plazaTop', sand: 'sandTop', rock: 'rockTop', plank: 'plankTop', stairs: 'plazaTop', high: 'grassTop', forest: 'forestTop', wood: 'forestTop', ruin: 'ruinTop', dais: 'ruinTop' };
+const SIDE = { grass: 'grassSide', flower: 'grassSide', path: 'grassSide', plaza: 'stone', sand: 'sandSide', rock: 'rockSide', plank: 'plankSide', stairs: 'stone', high: 'grassSide', forest: 'grassSide', wood: 'grassSide', ruin: 'stone', dais: 'stone' };
+const BASE_H = { grass: 0, flower: 0, path: 0, plaza: 0.08, sand: -0.22, rock: 0.5, plank: 0, stairs: 0.5, high: 1.0, forest: 0, wood: 0, ruin: 0.08, dais: 0.5 };
+
+// 各區域的氣氛：霧色、霧距、天光與夕陽強度
+const AREA = {
+  town: { fog: '#2b2a45', near: 24, far: 52, bg: '#25243d', hemi: 1.15, sun: 1.9, sunColor: '#ffb27a' },
+  forest: { fog: '#2a3a40', near: 13, far: 34, bg: '#1c282c', hemi: 1.3, sun: 1.35, sunColor: '#d8e0c0' },
+  forestClear: { fog: '#2a3442', near: 18, far: 44, bg: '#1e2833', hemi: 1.35, sun: 1.6, sunColor: '#f0d8b0' },
+  ruins: { fog: '#211c38', near: 17, far: 44, bg: '#151229', hemi: 0.95, sun: 1.15, sunColor: '#c0c4ff' }
+};
 
 // ---------- 地圖 ----------
 function buildMap() {
-  const T = Array.from({ length: H }, () => Array(W).fill('grass'));
-  const block = Array.from({ length: H }, () => Array(W).fill(false));
+  const T = {}, block = {};
+  for (let z = ZMIN; z < H; z++) { T[z] = Array(W).fill('grass'); block[z] = Array(W).fill(false); }
   const rect = (x0, z0, x1, z1, t) => { for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) T[z][x] = t; };
   const coastZ = x => 26 + Math.round(Math.sin(x * 0.7) * 0.8);
   const coastX = z => 36 + Math.round(Math.sin(z * 0.9) * 0.8);
@@ -30,12 +40,35 @@ function buildMap() {
   rect(17, 18, 18, 24, 'path');
   rect(24, 16, 31, 16, 'path'); rect(29, 17, 30, 20, 'path'); rect(31, 10, 31, 15, 'path');
   rect(10, 19, 16, 19, 'path');
+  rect(18, 0, 19, 11, 'path'); // 廣場往北門
   for (let z = 21; z < H; z++) for (let x = 29; x <= 35; x++) {
     const inside = z < 26 ? (x >= 29 && x <= 34) : (x >= 30 && x <= 34 && z <= 29);
     if (inside) T[z][x] = 'rock';
   }
   for (let z = coastZ(17) - 1; z < H; z++) { T[z][17] = 'plank'; T[z][18] = 'plank'; }
-  for (let z = 0; z < H; z++) for (let x = 0; x < W; x++) if (T[z][x] === 'water' || x === 0 || z === 0) block[z][x] = true;
+
+  // 北方：先全部種滿林木，再挖出步道、營地、溪流與遺跡
+  rect(0, ZMIN, W - 1, -1, 'wood');
+  rect(15, -5, 22, -1, 'forest');   // 森林入口
+  rect(9, -9, 15, -6, 'forest');    // 往營地
+  rect(7, -12, 14, -6, 'forest');   // 營地空地
+  rect(18, -11, 22, -5, 'forest');  // 中段
+  rect(22, -12, 29, -9, 'forest');  // 往東
+  rect(29, -11, 35, -9, 'forest');  // 東側盡頭
+  rect(24, -13, 29, -12, 'forest'); // 溪邊
+  rect(1, -15, 38, -14, 'water');   // 溪流
+  rect(26, -15, 27, -14, 'plank');  // 木橋
+  rect(22, -19, 31, -16, 'forest'); // 北岸
+  rect(14, -20, 23, -17, 'forest'); // 蘑菇林
+  rect(16, -21, 21, -21, 'forest'); // 遺跡入口（霧牆）
+  rect(18, -11, 19, -1, 'path'); rect(12, -8, 17, -7, 'path'); rect(20, -11, 26, -10, 'path');
+  rect(26, -13, 27, -11, 'path'); rect(26, -18, 27, -16, 'path'); rect(18, -19, 25, -18, 'path'); rect(18, -21, 19, -19, 'path');
+  rect(8, -33, 29, -22, 'ruin');
+  rect(14, -32, 22, -29, 'dais');
+
+  for (let z = ZMIN; z < H; z++) for (let x = 0; x < W; x++) {
+    if (T[z][x] === 'water' || T[z][x] === 'wood' || x === 0 || z === ZMIN || (z === 0 && x !== 18 && x !== 19)) block[z][x] = true;
+  }
   return { T, block, coastZ };
 }
 
@@ -112,7 +145,7 @@ export function createWorld(quality) {
   const { T, block } = map;
   const R = rng(4242);
   const heightOf = (x, z) => {
-    if (x < 0 || z < 0 || x >= W || z >= H) return 0;
+    if (x < 0 || z < ZMIN || x >= W || z >= H) return 0;
     const t = T[z][x];
     return t === 'water' ? WATER_Y - 0.35 : BASE_H[t];
   };
@@ -131,7 +164,7 @@ export function createWorld(quality) {
 
   // 地形：每格一個頂面；鄰格較低時補上側面，形成立體透視模型般的斷面。
   const gb = new GeoBuilder();
-  for (let z = 0; z < H; z++) for (let x = 0; x < W; x++) {
+  for (let z = ZMIN; z < H; z++) for (let x = 0; x < W; x++) {
     const t = T[z][x];
     if (t === 'water') continue;
     const h = BASE_H[t];
@@ -151,13 +184,14 @@ export function createWorld(quality) {
   terrain.add(...gb.meshes(terrainMats));
   scene.add(terrain);
 
-  // 地圖外的林地與海面
-  const outerTex = tex.grassTop.clone(); outerTex.repeat.set(70, 70); outerTex.needsUpdate = true;
-  const outer = new THREE.Mesh(new THREE.PlaneGeometry(70, 70), new THREE.MeshLambertMaterial({ map: outerTex, color: '#8a9a80' }));
-  outer.rotation.x = -Math.PI / 2; outer.position.set(-35 + 0.001, -0.005, -35 + 0.001); outer.receiveShadow = true;
-  const outer2 = outer.clone(); outer2.position.set(35, -0.005, -35); outer2.scale.set(1, 1, 1);
-  const outer3 = outer.clone(); outer3.position.set(-35, -0.005, 25);
-  scene.add(outer, outer2, outer3);
+  // 地圖外的林地與海面：三片地面圍住地圖（西側、北方、東北），地圖範圍內不鋪，溪流才看得到水面。
+  const outerMat = new THREE.MeshLambertMaterial({ color: '#8a9a80' });
+  for (const [w, d, cx, cz] of [[70, 150, -35, -15], [100, 55, 45, -63.5], [50, 36, 65, -18]]) {
+    const t = tex.grassTop.clone(); t.repeat.set(w, d); t.needsUpdate = true;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), outerMat.clone()); m.material.map = t;
+    m.rotation.x = -Math.PI / 2; m.position.set(cx, -0.005, cz); m.receiveShadow = true;
+    scene.add(m);
+  }
   const waterTex = tex.water; waterTex.repeat.set(90, 90);
   const water = new THREE.Mesh(new THREE.PlaneGeometry(180, 180), new THREE.MeshStandardMaterial({ map: waterTex, roughness: 0.28, metalness: 0.05, color: '#b8d4e8' }));
   water.rotation.x = -Math.PI / 2; water.position.set(20, WATER_Y, 16); water.receiveShadow = true;
@@ -170,20 +204,44 @@ export function createWorld(quality) {
     spriteMats[k] = new THREE.MeshLambertMaterial({ map: spr[k], alphaTest: 0.5, side: THREE.DoubleSide });
     spriteMats[k].userData.depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: spr[k], alphaTest: 0.5 });
   }
-  const placed = { tree: [], tree2: [], pine: [], bush: [], tuft: [] };
+  const placed = { tree: [], tree2: [], pine: [], bush: [], tuft: [], mushroom: [] };
   const plant = (kind, x, z, blocking = true, s = 1) => {
     placed[kind].push([x, z, s]);
     if (blocking) block[Math.floor(z)][Math.floor(x)] = true;
   };
-  // 北側與西側林帶
-  for (let x = 0; x < 36; x++) { plant('pine', x + 0.5, 0.6, false, 1 + R() * 0.25); if (R() > 0.45) plant('pine', x + 0.5, 1.5, true, 0.9 + R() * 0.2); }
+  const gate = x => x >= 17 && x <= 20;
+  // 北側與西側林帶（北門前留出通道）
+  for (let x = 0; x < 36; x++) {
+    const s1 = 1 + R() * 0.25; if (!gate(x)) plant('pine', x + 0.5, 0.6, false, s1);
+    if (R() > 0.45) { const s2 = 0.9 + R() * 0.2; if (!(x >= 16 && x <= 21)) plant('pine', x + 0.5, 1.5, true, s2); }
+  }
   for (let z = 2; z < 25; z++) { plant('pine', 0.6, z + 0.5, false, 1 + R() * 0.25); if (R() > 0.5 && T[z][1] === 'grass') plant('pine', 1.5, z + 0.5, true, 0.95); }
-  for (let i = 0; i < 90; i++) { const x = -18 + R() * 54, z = -14 + R() * 13.5; plant('pine', x, z, false, 1 + R() * 0.4); }
   for (let i = 0; i < 40; i++) { const x = -16 + R() * 15.5, z = R() * 26; plant('pine', x, z, false, 1 + R() * 0.4); }
-  const trees = [[3, 12], [4, 18], [2, 22], [9, 22], [13, 24], [24, 21], [22, 23], [33, 12], [26, 19], [11, 20], [3, 15], [6, 23], [34, 15], [31, 10], [24, 3], [18, 3], [3.5, 3.5], [10.5, 3], [11, 7], [3, 7.5], [5, 20.5], [14.5, 20.5]];
+  // 北方的林木：每個 wood 格一棵，另在地圖外圍種上遠景林
+  // 步道南側（鏡頭這一側）的林木改成灌木與矮樹，免得整片松樹擋住視線
+  const walk = (x, z) => T[z]?.[x] && T[z][x] !== 'wood' && T[z][x] !== 'water';
+  for (let z = ZMIN; z < 0; z++) for (let x = 0; x < W; x++) {
+    if (T[z][x] !== 'wood') continue;
+    const open = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => walk(x + dx, z + dz));
+    const front = walk(x, z - 1) || walk(x, z - 2) || walk(x - 1, z - 1) || walk(x + 1, z - 1);
+    if (front) {
+      plant('bush', x + 0.5, z + 0.6, true, 1.1 + R() * 0.3);
+      if (R() > 0.75) plant('pine', x + 0.3 + R() * 0.4, z + 0.5 + R() * 0.3, false, 0.6 + R() * 0.15);
+    } else if (open || R() > 0.25) plant('pine', x + 0.3 + R() * 0.4, z + 0.3 + R() * 0.4, true, 0.95 + R() * 0.35);
+  }
+  for (let i = 0; i < 70; i++) plant('pine', -16 + R() * 15.5, -38 + R() * 38, false, 1 + R() * 0.4);
+  for (let i = 0; i < 60; i++) plant('pine', 40.5 + R() * 14, -36 + R() * 35, false, 1 + R() * 0.4);
+  for (let i = 0; i < 90; i++) plant('pine', -16 + R() * 72, -48 + R() * 11.5, false, 1.1 + R() * 0.4);
+  const trees = [[3, 12], [4, 18], [2, 22], [9, 22], [13, 24], [24, 21], [22, 23], [33, 12], [26, 19], [11, 20], [3, 15], [6, 23], [34, 15], [31, 10], [24, 3], [3.5, 3.5], [10.5, 3], [11, 7], [3, 7.5], [5, 20.5], [14.5, 20.5]];
   trees.forEach(([x, z], i) => plant(i % 2 ? 'tree2' : 'tree', x + 0.5, z + 0.5, true, 0.95 + R() * 0.15));
-  const bushes = [[31, 3], [33, 4], [31, 5], [27, 5], [33, 7], [12, 17], [8, 14], [27, 15], [15, 4], [19, 9], [24, 9]];
+  const bushes = [[31, 3], [33, 4], [31, 5], [27, 5], [33, 7], [12, 17], [8, 14], [27, 15], [15, 4], [24, 9]];
   bushes.forEach(([x, z]) => plant('bush', x + 0.5, z + 0.6, true, 1));
+  // 霧之森的發光蘑菇：沿著步道邊緣
+  for (let z = -20; z < 0; z++) for (let x = 1; x < W - 1; x++) {
+    if (T[z][x] !== 'forest' || block[z][x]) continue;
+    const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => T[z + dz]?.[x + dx] === 'wood');
+    if (edge && R() > 0.72) plant('mushroom', x + 0.2 + R() * 0.6, z + 0.2 + R() * 0.6, false, 0.7 + R() * 0.5);
+  }
   // ---------- 建築 ----------
   const M = {
     plaster: new THREE.MeshLambertMaterial({ map: tex.plaster }), stone: new THREE.MeshLambertMaterial({ map: tex.stone }),
@@ -285,21 +343,147 @@ export function createWorld(quality) {
   const shrineLight = new THREE.PointLight('#ffb366', 6, 6, 1.6); shrineLight.position.set(7, 2, 3.8); scene.add(shrineLight);
   lanterns.push({ light: shrineLight, seed: 3.3 });
 
-  // 精靈板一次建成 InstancedMesh；草叢放在所有建物定位之後，避免長進牆裡。
-  for (let z = 1; z < H; z++) for (let x = 1; x < W; x++) {
-    if ((T[z][x] === 'grass' || T[z][x] === 'high') && !block[z][x] && R() > 0.8) plant('tuft', x + R(), z + R(), false, 0.7 + R() * 0.5);
+  // ---------- 北門的黑色荊棘：燈塔點亮前擋住去路 ----------
+  const brambleMat = new THREE.MeshLambertMaterial({ map: spr.bramble, alphaTest: 0.5, side: THREE.DoubleSide });
+  const brambleDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: spr.bramble, alphaTest: 0.5 });
+  const brambles = new THREE.Group();
+  for (const [x, s] of [[17.6, 1.1], [18.4, 1.3], [19.2, 1.15], [20.1, 0.95]]) {
+    const m = new THREE.Mesh(spriteGeo(2 * s, 1.5 * s), brambleMat);
+    m.position.set(x, 0, 0.5); m.castShadow = true; m.customDepthMaterial = brambleDepth;
+    brambles.add(m);
   }
-  const SIZE = { tree: [2, 3], tree2: [2, 3], pine: [2, 3], bush: [1, 1], tuft: [0.9, 0.45] };
+  scene.add(brambles);
+  const setGate = open => { brambles.visible = !open; block[0][18] = block[0][19] = !open; };
+  setGate(false);
+
+  // ---------- 霧之森的營地：營火、帳篷、圍坐的原木 ----------
+  block[-10][10] = true;
+  for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; add(new THREE.Mesh(new THREE.DodecahedronGeometry(0.15, 0), rockMat), 10.5 + Math.cos(a) * 0.36, 0.07, -9.5 + Math.sin(a) * 0.36).rotation.set(R(), R(), R()); }
+  for (const r of [0.7, -0.7]) add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.65, 6), M.wood), 10.5, 0.1, -9.5).rotation.set(Math.PI / 2, 0, r);
+  const flame = add(new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.55, 6), new THREE.MeshBasicMaterial({ color: hdr(3.4, 1.4, 0.35) })), 10.5, 0.38, -9.5);
+  flame.castShadow = false;
+  const fireLight = new THREE.PointLight('#ff9a4a', 12, 9, 1.5); fireLight.position.set(10.5, 0.9, -9.5); scene.add(fireLight);
+  lanterns.push({ light: fireLight, seed: 7.7, fire: flame });
+  for (const [x, z] of [[9.4, -9.6], [11.6, -9.6]]) {
+    block[Math.floor(z)][Math.floor(x)] = true;
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.85, 7), M.wood), x, 0.17, z).rotation.set(Math.PI / 2, 0, 0);
+  }
+  blockRect(7, -12, 8, -11);
+  const clothMat = new THREE.MeshLambertMaterial({ map: tex.cloth, side: THREE.DoubleSide });
+  const tent = gableRoof(2.2, 2.0, 1.35, clothMat, clothMat); tent.position.set(8, 0, -11); tent.rotation.y = Math.PI / 2; scene.add(tent);
+
+  // ---------- 遺跡入口的濃霧：擊敗霧狼王後散去 ----------
+  const mistTex = (() => {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 64;
+    const g = c.getContext('2d');
+    for (let i = 0; i < 26; i++) {
+      const x = R() * 128, y = 24 + R() * 32, r = 10 + R() * 16; // 霧貼著地面，越往上越淡
+      for (const ox of [-128, 0, 128]) { // 左右各畫一次，橫向捲動時才不會出現接縫
+        const grd = g.createRadialGradient(x + ox, y, 0, x + ox, y, r);
+        grd.addColorStop(0, 'rgba(255,255,255,0.5)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = grd; g.fillRect(0, 0, 128, 64);
+      }
+    }
+    const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; return t;
+  })();
+  // 固定不動的透明度遮罩：四邊淡出，霧牆才不會有方方正正的邊
+  const mistEdge = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d'), img = g.createImageData(64, 64);
+    const ramp = (v, a, b) => Math.min(1, Math.max(0, (v - a) / (b - a)));
+    for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+      const u = x / 63, v = 1 - y / 63; // v：0 在底部
+      const k = ramp(u, 0, 0.25) * ramp(1 - u, 0, 0.25) * ramp(v, 0, 0.15) * ramp(1 - v, 0, 0.5);
+      const i = (y * 64 + x) * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = k * k * (3 - 2 * k) * 255; img.data[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    return new THREE.CanvasTexture(c);
+  })();
+  const mist = new THREE.Group(), mistMats = [];
+  for (let k = 0; k < 3; k++) {
+    const map = mistTex.clone(); map.needsUpdate = true;
+    const mat = new THREE.MeshBasicMaterial({ map, alphaMap: mistEdge, color: hdr(0.8, 0.9, 0.95), transparent: true, depthWrite: false, side: THREE.DoubleSide });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(10, 3.6), mat); m.position.set(19, 1.6, -20.4 - k * 0.45);
+    mist.add(m); mistMats.push(mat);
+  }
+  scene.add(mist);
+  let mistK = 0, mistTarget = 0; // 0 濃霧、1 散去；散去時慢慢過渡
+  const setMist = (cleared, instant) => {
+    mistTarget = cleared ? 1 : 0; if (instant) mistK = mistTarget;
+    for (let x = 16; x <= 21; x++) block[-21][x] = !cleared;
+  };
+  setMist(false, true);
+
+  // ---------- 星之古塔遺跡 ----------
+  const ruinStone = new THREE.MeshLambertMaterial({ map: tex.stone, color: '#b4b4cc' });
+  for (const [x, z, h] of [[9, -23, 2.6], [12, -23, 1.2], [24, -23, 2.8], [27, -23, 0.8], [9, -27, 3.0], [28, -27, 2.2], [10, -31, 2.8], [27, -31, 3.1], [13, -26, 0.6], [23, -25, 0.7]]) {
+    block[z][x] = true;
+    add(new THREE.Mesh(worldBox(0.7, h, 0.7), ruinStone), x + 0.5, 0.08 + h / 2, z + 0.5);
+    if (h > 2) add(new THREE.Mesh(worldBox(0.95, 0.22, 0.95), ruinStone), x + 0.5, 0.08 + h + 0.11, z + 0.5);
+  }
+  const blueGlow = new THREE.MeshBasicMaterial({ color: hdr(0.9, 1.8, 3.4) });
+  for (const x of [12, 24]) {
+    block[-28][x] = true;
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.34, 1.0, 8), ruinStone), x + 0.5, 0.58, -27.5);
+    const f = add(new THREE.Mesh(worldBox(0.34, 0.32, 0.34), blueGlow), x + 0.5, 1.24, -27.5); f.castShadow = false;
+    const l = new THREE.PointLight('#7ab8ff', 6, 7, 1.6); l.position.set(x + 0.5, 1.6, -27.5); scene.add(l);
+    lanterns.push({ light: l, seed: x * 0.7, fire: f });
+  }
+  // 星之石像（休息點）
+  block[-24][15] = true;
+  add(new THREE.Mesh(worldBox(0.8, 0.9, 0.8), ruinStone), 15.5, 0.53, -23.5);
+  const starMat = new THREE.MeshBasicMaterial({ color: hdr(3.2, 2.7, 1.3) });
+  const statueStar = add(new THREE.Mesh(new THREE.OctahedronGeometry(0.26, 0), starMat), 15.5, 1.35, -23.5); statueStar.castShadow = false; statueStar.scale.y = 1.4;
+  // 古塔：基座、塔身、塔頂水晶（被熄星者染成紫黑色，打倒後恢復金色）
+  blockRect(15, -35, 21, -33);
+  const tower = new THREE.Group(); tower.position.set(18.5, 0.08, -34.2); scene.add(tower);
+  add(new THREE.Mesh(new THREE.CylinderGeometry(3.0, 3.2, 1.2, 10), ruinStone), 0, 0.6, 0, tower);
+  add(new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.6, 7, 10), ruinStone), 0, 4.7, 0, tower);
+  add(new THREE.Mesh(new THREE.CylinderGeometry(2.75, 2.75, 0.4, 10), M.dark), 0, 8.4, 0, tower);
+  add(new THREE.Mesh(new THREE.CylinderGeometry(1.7, 2.1, 1.6, 10), ruinStone), 0, 9.4, 0, tower);
+  add(new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.6), M.door), 0, 2.0, 2.56, tower).rotation.x = -0.05;
+  for (let k = 0; k < 3; k++) add(new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.5), new THREE.MeshBasicMaterial({ color: '#1a1530' })), 0, 4 + k * 1.6, 2.33 - k * 0.04, tower);
+  const crystalMat = new THREE.MeshBasicMaterial({ color: hdr(1.3, 0.5, 2.8) });
+  const crystal = add(new THREE.Mesh(new THREE.OctahedronGeometry(0.9, 0), crystalMat), 0, 11.4, 0, tower); crystal.scale.y = 1.7; crystal.castShadow = false;
+  const towerLight = new THREE.PointLight('#b07aff', 22, 18, 1.4); towerLight.position.set(0, 11, 1.5); tower.add(towerLight);
+  const setTower = freed => {
+    crystalMat.color.copy(freed ? hdr(3.4, 2.8, 1.3) : hdr(1.3, 0.5, 2.8));
+    towerLight.color.set(freed ? '#ffd27a' : '#b07aff');
+  };
+
+  // 精靈板一次建成 InstancedMesh；草叢放在所有建物定位之後，避免長進牆裡。
+  for (let z = ZMIN + 1; z < H; z++) for (let x = 1; x < W; x++) {
+    if ((T[z][x] === 'grass' || T[z][x] === 'high' || T[z][x] === 'forest') && !block[z][x] && R() > 0.8) plant('tuft', x + R(), z + R(), false, 0.7 + R() * 0.5);
+  }
+  const SIZE = { tree: [2, 3], tree2: [2, 3], pine: [2, 3], bush: [1, 1], tuft: [0.9, 0.45], mushroom: [0.6, 0.6] };
+  // 蘑菇自己發光；樹木與灌木擋在角色前方時，挖出一個網點狀的透明圓（cutout），角色才不會被樹遮住。
+  spriteMats.mushroom.emissive = hdr(1.6, 1.6, 1.6); spriteMats.mushroom.emissiveMap = spr.mushroom;
+  const cutout = { uCutPx: { value: new THREE.Vector2(-9999, -9999) }, uCutDist: { value: 0 }, uCutR: { value: 0 } };
+  for (const k of ['tree', 'tree2', 'pine', 'bush']) {
+    spriteMats[k].onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, cutout);
+      sh.fragmentShader = sh.fragmentShader
+        .replace('void main() {', 'uniform vec2 uCutPx; uniform float uCutDist; uniform float uCutR;\nvoid main() {')
+        .replace('#include <alphatest_fragment>', `#include <alphatest_fragment>
+          float cutD = length(gl_FragCoord.xy - uCutPx);
+          if (vViewPosition.z < uCutDist - 0.9 && cutD < uCutR) {
+            vec2 cell = mod(floor(gl_FragCoord.xy), 2.0);
+            float bayer = cell.x * 0.5 + abs(cell.x - cell.y) * 0.25 + 0.125;
+            if (smoothstep(0.55, 1.0, cutD / uCutR) < bayer) discard;
+          }`);
+    };
+    spriteMats[k].customProgramCacheKey = () => 'cutout';
+  }
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sv = new THREE.Vector3(), pv = new THREE.Vector3();
   for (const k in placed) {
     const list = placed[k];
     if (!list.length) continue;
     const im = new THREE.InstancedMesh(spriteGeo(...SIZE[k]), spriteMats[k], list.length);
     list.forEach(([x, z, s], i) => {
-      const y = heightOf(Math.floor(x), Math.floor(z)) * (x >= 0 && z >= 0 && x < W && z < H ? 1 : 0);
+      const y = heightOf(Math.floor(x), Math.floor(z)) * (x >= 0 && z >= ZMIN && x < W && z < H ? 1 : 0);
       im.setMatrixAt(i, m4.compose(pv.set(x, Math.max(0, y), z), q, sv.set(s, s, s)));
     });
-    im.castShadow = k !== 'tuft'; im.receiveShadow = true;
+    im.castShadow = k !== 'tuft' && k !== 'mushroom'; im.receiveShadow = true;
     im.customDepthMaterial = spriteMats[k].userData.depth;
     scene.add(im);
   }
@@ -333,10 +517,11 @@ export function createWorld(quality) {
   };
 
   // ---------- 螢火蟲 ----------
-  const flyCount = quality === 'high' ? 90 : 45;
+  const flyCount = quality === 'high' ? 140 : 70;
   const fp = new Float32Array(flyCount * 3), fs = new Float32Array(flyCount);
   for (let i = 0; i < flyCount; i++) {
-    let x, z; do { x = 2 + R() * 32; z = 2 + R() * 22; } while (T[Math.floor(z)][Math.floor(x)] === 'water');
+    // 約三分之二在港口，其餘散在霧之森的步道上
+    let x, z; do { x = 2 + R() * 34; z = i % 3 ? 2 + R() * 22 : -20 + R() * 19; } while (['water', 'wood'].includes(T[Math.floor(z)][Math.floor(x)]));
     fp.set([x, 0.4 + R() * 1.8 + (T[Math.floor(z)][Math.floor(x)] === 'high' ? 1 : 0), z], i * 3); fs[i] = R() * 100;
   }
   const flyGeo = new THREE.BufferGeometry();
@@ -357,14 +542,33 @@ export function createWorld(quality) {
 
   const isBlocked = (x, z) => {
     const ix = Math.floor(x), iz = Math.floor(z);
-    if (ix < 0 || iz < 0 || ix >= W || iz >= H) return true;
+    if (ix < 0 || iz < ZMIN || ix >= W || iz >= H) return true;
     return block[iz][ix];
   };
   const groundAt = (x, z) => Math.max(-0.22, heightOf(Math.floor(x), Math.floor(z)));
 
+  // 依鏡頭位置在港口、霧之森、遺跡三種氣氛之間平滑切換
+  const cA = new THREE.Color(), cB = new THREE.Color();
+  const blend = (a, b, k) => {
+    const o = {};
+    for (const key in a) o[key] = typeof a[key] === 'number' ? a[key] + (b[key] - a[key]) * k : '#' + cA.set(a[key]).lerp(cB.set(b[key]), k).getHexString();
+    return o;
+  };
+  function atmosphere(z) {
+    const wf = THREE.MathUtils.smoothstep(-z, 0.5, 4.5), wr = THREE.MathUtils.smoothstep(-z, 19.5, 23.5);
+    const a = blend(blend(AREA.town, blend(AREA.forest, AREA.forestClear, mistK), wf), AREA.ruins, wr);
+    scene.fog.color.set(a.fog); scene.fog.near = a.near; scene.fog.far = a.far;
+    scene.background.set(a.bg);
+    hemi.intensity = a.hemi; sun.intensity = a.sun; sun.color.set(a.sunColor);
+  }
+
   let time = 0;
   return {
     scene, sun, hemi, lighthouse, flies, spriteGeo, isBlocked, groundAt, tiles: T,
+    setGate, setMist, setTower,
+    setBlocked(x, z, v) { block[z][x] = v; },
+    // 角色在畫面上的位置（繪圖緩衝區像素）與到鏡頭的距離，給樹木挖透明圓用
+    setCutout(px, py, dist, radius) { cutout.uCutPx.value.set(px, py); cutout.uCutDist.value = dist; cutout.uCutR.value = radius; },
     setQuality(q) {
       sun.castShadow = q === 'high';
       flyMat.uniforms.boost.value = q === 'high' ? 1 : 0.8;
@@ -373,9 +577,19 @@ export function createWorld(quality) {
     update(dt, focus) {
       time += dt;
       waterTex.offset.set(time * 0.012, Math.sin(time * 0.3) * 0.01);
-      for (const l of lanterns) l.light.intensity = (l.base ??= l.light.intensity) * (0.88 + 0.12 * Math.sin(time * 9 + l.seed) * Math.sin(time * 5.3 + l.seed * 2));
+      for (const l of lanterns) {
+        const k = 0.88 + 0.12 * Math.sin(time * 9 + l.seed) * Math.sin(time * 5.3 + l.seed * 2);
+        l.light.intensity = (l.base ??= l.light.intensity) * k;
+        if (l.fire) l.fire.scale.y = 0.75 + 0.5 * k * (0.8 + 0.2 * Math.sin(time * 13 + l.seed));
+      }
       flyMat.uniforms.time.value = time;
       lighthouse.update(dt);
+      mistK += Math.sign(mistTarget - mistK) * Math.min(Math.abs(mistTarget - mistK), dt * 0.4);
+      mistMats.forEach((m, k) => { m.map.offset.x = time * (0.015 + k * 0.008) + k * 0.37; m.opacity = (1 - mistK) * 0.9; });
+      mist.visible = mistK < 1;
+      statueStar.rotation.y = time * 0.8;
+      crystal.rotation.y = time * 0.3;
+      atmosphere(focus.z);
       // 陰影相機跟著鏡頭走，但以半格為單位移動，減少陰影邊緣閃動。
       const fx = Math.round(focus.x * 2) / 2, fz = Math.round(focus.z * 2) / 2;
       sun.position.set(fx - 16, 11, fz + 7);
