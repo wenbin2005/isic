@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1426">
+  <meta name="description" content="星燈港：一款 HD-2D 風格的小品冒險。在黃昏的港口小鎮找回三顆星之碎片，重新點亮燈塔。">
+  <title>星燈港 · HD-2D 小品冒險</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+</head>
+<body>
+  <canvas id="game" aria-label="星燈港遊戲畫面"></canvas>
+
+  <div id="loading" class="overlay loading" role="status">
+    <div class="beacon" aria-hidden="true"><i></i></div>
+    <p>正在點亮港口……</p>
+  </div>
+
+  <section id="title" class="overlay title" hidden aria-labelledby="game-title">
+    <div class="title-inner">
+      <p class="eyebrow"><span></span>HD-2D 小品冒險<span></span></p>
+      <h1 id="game-title">星燈港</h1>
+      <p class="tagline">燈塔熄滅的黃昏，三顆星之碎片散落在小鎮各處。<br>找回它們，讓港口的夜晚再次明亮。</p>
+      <div class="actions">
+        <button id="start" class="btn primary">開始冒險</button>
+        <button id="title-help" class="btn ghost">操作說明</button>
+      </div>
+      <p class="meta">約 5 分鐘 · 鍵盤、滑鼠或觸控皆可遊玩</p>
+    </div>
+  </section>
+
+  <header id="hud" class="hud" hidden>
+    <div class="objective">
+      <span class="label">目前目標</span>
+      <p id="objective-text"></p>
+      <div id="gems" class="gems" role="img" aria-label="星之碎片 0 / 3"><i></i><i></i><i></i></div>
+    </div>
+    <button id="menu-btn" class="icon-btn" aria-label="開啟選單">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </header>
+
+  <div id="prompt" class="prompt" hidden><kbd id="prompt-key">空白鍵</kbd><span id="prompt-text">對話</span></div>
+
+  <section id="dialogue" class="dialogue" hidden aria-live="polite">
+    <div id="speaker" class="speaker"></div>
+    <p id="dialogue-text"></p>
+    <span class="next" aria-hidden="true"></span>
+  </section>
+
+  <div id="touch" class="touch" hidden>
+    <div id="stick-zone" class="stick-zone" aria-label="移動搖桿：在左半邊按住並拖曳"></div>
+    <div id="stick" class="stick" aria-hidden="true"><i></i></div>
+    <button id="act-btn" class="act-btn">調查</button>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <dialog id="menu" class="panel" aria-labelledby="menu-title">
+    <h2 id="menu-title">暫停</h2>
+    <div class="panel-actions">
+      <button id="resume" class="btn primary">繼續遊戲</button>
+      <button id="menu-help" class="btn ghost">操作說明</button>
+      <label class="field"><span>畫質</span>
+        <select id="quality-select">
+          <option value="high">精緻（景深、光暈、陰影）</option>
+          <option value="balanced">流暢（適合較舊的裝置）</option>
+        </select>
+      </label>
+      <button id="restart" class="btn ghost">從頭開始</button>
+    </div>
+  </dialog>
+
+  <dialog id="help" class="panel" aria-labelledby="help-title">
+    <h2 id="help-title">操作說明</h2>
+    <dl class="keys">
+      <dt>移動</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 或方向鍵；手機在畫面左半邊按住拖曳</dd>
+      <dt>對話、調查</dt><dd><kbd>空白鍵</kbd> <kbd>Enter</kbd> <kbd>E</kbd>；手機點右下「調查」</dd>
+      <dt>下一句</dt><dd>同上，或直接點對話框</dd>
+      <dt>暫停</dt><dd><kbd>Esc</kbd> 或右上角選單</dd>
+    </dl>
+    <p class="note">靠近發光的星之碎片就會自動拾取。畫面卡頓時會自動改用流暢畫質，也可以在選單手動切換。</p>
+    <button class="btn primary" data-close>知道了</button>
+  </dialog>
+
+  <section id="ending" class="overlay ending" hidden aria-labelledby="end-title">
+    <div class="ending-inner">
+      <p class="eyebrow"><span></span>終章<span></span></p>
+      <h2 id="end-title">燈塔，再次亮起</h2>
+      <p>星光越過海面，照亮了回港的路。<br>今晚的星燈港，因為你而明亮。</p>
+      <p class="time">遊玩時間　<strong id="end-time"></strong></p>
+      <div class="actions">
+        <button id="end-continue" class="btn primary">繼續漫步</button>
+        <button id="end-restart" class="btn ghost">重新開始</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="error" class="overlay error" hidden>
+    <div><h2>無法啟動 3D 畫面</h2><p>這台裝置或瀏覽器目前無法使用 WebGL。請改用新版 Chrome、Edge、Safari 或 Firefox，並確認已開啟硬體加速。</p></div>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
