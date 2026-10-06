@@ -19,7 +19,7 @@ const ENEMY_POS = { 1: [[-2.7, 0]], 2: [[-2.0, -1.1], [-3.7, 0.9]], 3: [[-1.9, -
 const TYPE_FX = { sword: '#ffffff', dagger: '#e8f0ff', staff: '#ffe9b0', fire: '#ff7a2a', wind: '#6affb0', light: '#ffe27a' };
 const SHORT = { hero: '旅', mira: '米', sein: '賽' };
 
-export function createBattleView({ renderer, post, root, reduceMotion }) {
+export function createBattleView({ renderer, post, root, reduceMotion, audio = { sfx() {}, music() {} } }) {
   const tex = makeTileTextures(), spr = makeSpriteTextures();
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 140);
@@ -317,7 +317,7 @@ export function createBattleView({ renderer, post, root, reduceMotion }) {
       btn.disabled = false; btn.setAttribute('aria-disabled', it.disabled ? 'true' : 'false');
       btn.innerHTML = `<span class="l">${it.tag ? `<em class="tag t-${it.tagType || ''}">${it.tag}</em>` : ''}${it.label}</span>${it.sub ? `<span class="s">${it.sub}</span>` : ''}`;
       btn.addEventListener('click', () => { ui.index = i; pickCurrent(); });
-      btn.addEventListener('mouseenter', () => { ui.index = i; highlight(); });
+      btn.addEventListener('mouseenter', () => { if (ui.index !== i) audio.sfx('cursor'); ui.index = i; highlight(); });
       el.list.append(btn);
     });
     highlight();
@@ -334,12 +334,15 @@ export function createBattleView({ renderer, post, root, reduceMotion }) {
   function pickCurrent() {
     const it = ui.items[ui.index];
     if (!it) return;
-    if (it.disabled) { el.desc.textContent = it.why || it.desc || ''; el.desc.classList.remove('shake'); void el.desc.offsetWidth; el.desc.classList.add('shake'); return; }
+    if (it.disabled) { audio.sfx('deny'); el.desc.textContent = it.why || it.desc || ''; el.desc.classList.remove('shake'); void el.desc.offsetWidth; el.desc.classList.add('shake'); return; }
+    audio.sfx('confirm');
     it.pick();
   }
   function setBoost(d) {
     const u = ui.actor; if (!u) return;
+    const was = ui.boost;
     ui.boost = Math.max(0, Math.min(ui.boost + d, MAX_BOOST, u.bp));
+    if (ui.boost !== was) audio.sfx(d > 0 ? 'boost' : 'cursor', { level: ui.boost });
     el.bval.textContent = `蓄力 ${ui.boost}`;
     refresh();
   }
@@ -363,12 +366,14 @@ export function createBattleView({ renderer, post, root, reduceMotion }) {
     confirmTarget();
   }
   function confirmTarget() {
+    audio.sfx('confirm');
     const r = ui.tResolve; ui.tResolve = null;
     const t = ui.allTargets ? null : ui.targets[ui.tIndex];
     ui.mode = 'busy'; ui.targets = [];
     r({ ok: true, target: t });
   }
   function cancelTarget() {
+    audio.sfx('cancel');
     const r = ui.tResolve; ui.tResolve = null; ui.targets = []; ui.mode = 'menu';
     r({ ok: false });
   }
@@ -430,22 +435,24 @@ export function createBattleView({ renderer, post, root, reduceMotion }) {
     const up = k === 'ArrowUp' || k === 'KeyW', down = k === 'ArrowDown' || k === 'KeyS', left = k === 'ArrowLeft' || k === 'KeyA' || k === 'KeyQ', right = k === 'ArrowRight' || k === 'KeyD';
     if (ui.mode === 'result') {
       if (confirm) ui.resultButtons[ui.rIndex]?.click();
-      if (left || up) { ui.rIndex = Math.max(0, ui.rIndex - 1); focusResult(); }
-      if (right || down) { ui.rIndex = Math.min(ui.resultButtons.length - 1, ui.rIndex + 1); focusResult(); }
+      const was = ui.rIndex;
+      if (left || up) ui.rIndex = Math.max(0, ui.rIndex - 1);
+      if (right || down) ui.rIndex = Math.min(ui.resultButtons.length - 1, ui.rIndex + 1);
+      if (ui.rIndex !== was) { audio.sfx('cursor'); focusResult(); }
       return;
     }
     if (ui.mode === 'menu') {
-      if (up) { ui.index = (ui.index + ui.items.length - 1) % ui.items.length; highlight(); }
-      if (down) { ui.index = (ui.index + 1) % ui.items.length; highlight(); }
+      if (up) { ui.index = (ui.index + ui.items.length - 1) % ui.items.length; audio.sfx('cursor'); highlight(); }
+      if (down) { ui.index = (ui.index + 1) % ui.items.length; audio.sfx('cursor'); highlight(); }
       if (left) setBoost(-1);
       if (right) setBoost(1);
       if (confirm) pickCurrent();
-      if (back && ui.onBack) ui.onBack();
+      if (back && ui.onBack) { audio.sfx('cancel'); ui.onBack(); }
     } else if (ui.mode === 'target') {
       const n = ui.targets.length;
       if (!ui.allTargets && n) {
-        if (up || left) { ui.tIndex = (ui.tIndex + n - 1) % n; refresh(); }
-        if (down || right) { ui.tIndex = (ui.tIndex + 1) % n; refresh(); }
+        if (up || left) { ui.tIndex = (ui.tIndex + n - 1) % n; if (n > 1) audio.sfx('cursor'); refresh(); }
+        if (down || right) { ui.tIndex = (ui.tIndex + 1) % n; if (n > 1) audio.sfx('cursor'); refresh(); }
       }
       if (confirm) confirmTarget();
       if (back) cancelTarget();
@@ -474,12 +481,15 @@ export function createBattleView({ renderer, post, root, reduceMotion }) {
     fx(p.x, p.y + v.h * 0.5, p.z, color, { size: Math.max(1.4, v.h * 0.8), slash, dur: 0.32, grow: slash ? 1.2 : 1.9 });
   }
 
+  const ACT_SFX = { skill: 'cast', heal: 'cast', item: 'cast', reveal: 'cast', defend: 'guard', escape: 'escape', enemyAll: 'dark' };
   async function play(events) {
     let mover = null;
     for (const ev of events) {
       if (ev.t === 'act') {
         const u = ev.unit;
         caption(`${u.name}：${ev.label}`);
+        if (ACT_SFX[ev.kind]) audio.sfx(ACT_SFX[ev.kind]);
+        if (ev.bp) audio.sfx('boost', { level: ev.bp });
         if (u.side === 'party' && (ev.kind === 'attack' || ev.kind === 'skill')) { mover = u; await stepTo(u, -0.7); }
         else if (u.side === 'enemy') { mover = u; await stepTo(u, 0.6); }
         else if (ev.kind === 'heal' || ev.kind === 'item') { const v = vis.get(u); fx(v.mesh.position.x, v.h * 0.55, v.mesh.position.z, '#9affc0', { size: 1.6, dur: 0.4 }); await sleep(0.2); }
@@ -489,6 +499,7 @@ export function createBattleView({ renderer, post, root, reduceMotion }) {
         if (ev.bp) { const v = vis.get(u); fx(v.mesh.position.x, v.h * 0.5, v.mesh.position.z, '#ffd27a', { size: 1.2 + ev.bp * 0.25, dur: 0.4, intensity: 1.3 }); }
       } else if (ev.t === 'hit') {
         fxAt(ev.target, ev.type, ev.type === 'sword' || ev.type === 'dagger' || ev.type === 'staff' || !ev.type);
+        audio.sfx('hit', { type: ev.type, weak: ev.weak, party: ev.target.side === 'party' });
         hitFlash(ev.target);
         pop(ev.target, ev.dmg, ev.weak ? 'weak' : ev.target.side === 'party' ? 'hurt' : '');
         if (ev.weak) pop(ev.target, '弱點', 'tag', -36);
@@ -504,19 +515,22 @@ export function createBattleView({ renderer, post, root, reduceMotion }) {
       } else if (ev.t === 'break') {
         const v = vis.get(ev.target);
         sparks.fire(v.mesh.position.x, v.h * 0.55, v.mesh.position.z + 0.3);
+        audio.sfx('break');
         flashScreen(); pop(ev.target, '破防！', 'break'); caption(`${ev.target.name} 破防了！`, 1.4);
         refresh();
         await sleep(0.45);
       } else if (ev.t === 'heal' || ev.t === 'revive') {
         const v = vis.get(ev.target);
+        audio.sfx(ev.t);
         if (ev.t === 'revive') { v.mesh.rotation.z = 0; v.mesh.position.y = 0; v.mat.color.setScalar(1); }
         fx(v.mesh.position.x, v.h * 0.5, v.mesh.position.z, '#7affb0', { size: 1.6, dur: 0.45 });
         pop(ev.target, `+${ev.amount}`, 'heal');
         refresh(); await sleep(0.18);
       } else if (ev.t === 'sp') {
-        pop(ev.target, `SP +${ev.amount}`, 'heal'); refresh(); await sleep(0.18);
+        audio.sfx('sp'); pop(ev.target, `SP +${ev.amount}`, 'heal'); refresh(); await sleep(0.18);
       } else if (ev.t === 'ko') {
         const u = ev.target, v = vis.get(u);
+        audio.sfx(u.side === 'enemy' ? 'vanish' : 'down');
         if (u.side === 'enemy') {
           sparks.fire(v.mesh.position.x, v.h * 0.4, v.mesh.position.z + 0.2, '#b48aff');
           tween(0.55, k => { v.mesh.scale.set(1 - k * 0.3, 1 - k, 1); v.mat.color.setRGB(1 - k * 0.6, 1 - k * 0.8, 1 - k * 0.4); v.blob.scale.setScalar((1 - k) * Math.max(1, (v.w || 1) * 0.45)); }).then(() => { v.mesh.visible = false; v.blob.visible = false; });
@@ -526,6 +540,7 @@ export function createBattleView({ renderer, post, root, reduceMotion }) {
         }
         refresh(); await sleep(0.25);
       } else if (ev.t === 'phase') {
+        audio.sfx('phase');
         flashScreen('rgba(150,90,255,0.5)'); shake = 0.5;
         caption(ev.text, 2.4); refresh(); await sleep(1.3);
       } else if (ev.t === 'note') {
@@ -583,7 +598,7 @@ export function createBattleView({ renderer, post, root, reduceMotion }) {
       ui.resultButtons = buttons.map((bt, i) => {
         const btn = document.createElement('button');
         btn.type = 'button'; btn.className = 'btn ' + (i === 0 ? 'primary' : 'ghost'); btn.textContent = bt.label;
-        btn.addEventListener('click', () => { el.result.hidden = true; ui.mode = 'busy'; resolve(bt.value); });
+        btn.addEventListener('click', () => { audio.sfx('confirm'); el.result.hidden = true; ui.mode = 'busy'; resolve(bt.value); });
         el.rActions.append(btn);
         return btn;
       });
@@ -603,6 +618,7 @@ export function createBattleView({ renderer, post, root, reduceMotion }) {
     refresh(); renderOrder(null);
     renderer.compile(scene, camera);
     for (const u of b.enemies) { const v = vis.get(u); v.mesh.scale.set(1, 0.01, 1); }
+    audio.music(b.enemies.some(u => u.boss) ? 'boss' : 'battle', 0.1);
     caption(intro, 2);
     await tween(0.45, k => { for (const u of b.enemies) vis.get(u).mesh.scale.set(1, Math.max(0.01, 1 - Math.pow(1 - k, 3)), 1); });
     await sleep(0.5);
@@ -637,6 +653,7 @@ export function createBattleView({ renderer, post, root, reduceMotion }) {
     for (;;) {
       result = await fight(intro || (enc.escape === false ? '影獸擋住了去路！' : '遭遇敵人！'));
       if (result !== 'lose') break;
+      audio.music(null, 0.08); audio.sfx('defeat');
       const choice = await showResult({
         eyebrow: '戰鬥結果', title: '全員倒下了……', tone: 'lose',
         lines: [{ text: '別灰心。換個屬性試試看，或是先削掉護盾再全力進攻。' }, { text: '再試一次時，隊伍會完全回復。', cls: 'dim' }],
@@ -652,6 +669,7 @@ export function createBattleView({ renderer, post, root, reduceMotion }) {
     if (result === 'win') {
       for (const u of b.party) if (u.hp > 0) tween(0.4, k => { vis.get(u).mesh.position.y = Math.sin(k * Math.PI) * 0.35; });
       caption('勝利！', 2);
+      audio.music(null, 0.08); audio.sfx('victory');
       await sleep(0.6);
       const exp = b.rewards(), lines = [{ text: `獲得經驗值 <b>${exp}</b>` }], ups = [];
       for (const r of recs) {
@@ -663,6 +681,7 @@ export function createBattleView({ renderer, post, root, reduceMotion }) {
       }
       for (const [k, n] of Object.entries(enc.drops || {})) { items[k] = (items[k] || 0) + n; lines.push({ text: `獲得 ${ITEMS[k].name} ×${n}`, cls: 'item' }); }
       summary = { exp, ups };
+      if (ups.length) audio.sfx('levelup', { delay: 1 });
       if (!view.auto) await showResult({ eyebrow: '戰鬥結果', title: '勝利', lines, buttons: [{ label: '繼續', value: 'ok' }], tone: 'win' });
       else await sleep(0.3);
     } else if (result === 'escape') {

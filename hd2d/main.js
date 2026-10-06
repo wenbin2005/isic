@@ -8,6 +8,7 @@ import { memberStats, expToNext } from './battle-core.js';
 import { ITEMS, MEMBERS } from './data.js';
 import { monsterMaterial } from './monsters.js';
 import { S, CHAPTERS } from './story.js';
+import { createAudio } from './audio.js';
 
 const $ = id => document.getElementById(id);
 const ui = {
@@ -15,7 +16,7 @@ const ui = {
   chapterLabel: $('chapter-label'), partyHud: $('party-hud'), menuParty: $('menu-party'),
   prompt: $('prompt'), promptKey: $('prompt-key'), promptText: $('prompt-text'), dialogue: $('dialogue'), speaker: $('speaker'),
   text: $('dialogue-text'), toast: $('toast'), touch: $('touch'), stickZone: $('stick-zone'), stick: $('stick'), act: $('act-btn'),
-  menu: $('menu'), help: $('help'), ending: $('ending'), endTime: $('end-time'), endLevel: $('end-level'), error: $('error'), quality: $('quality-select'),
+  menu: $('menu'), help: $('help'), ending: $('ending'), endTime: $('end-time'), endLevel: $('end-level'), error: $('error'), quality: $('quality-select'), sound: $('sound-select'),
   battle: $('battle'), wipe: $('wipe'), chapter: $('chapter'), start: $('start'), cont: $('continue')
 };
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -48,7 +49,11 @@ const { scene } = world;
 const camera = new THREE.PerspectiveCamera(32, 1, 0.5, 140);
 const CAM_OFFSET = new THREE.Vector3(0, 11.5, 14);
 const post = new HD2DPost(renderer);
-const battleView = createBattleView({ renderer, post, root: ui.battle, reduceMotion });
+// ---------- 聲音（瀏覽器要等第一次按鍵或點擊才允許發聲） ----------
+const audio = createAudio();
+for (const type of ['pointerdown', 'pointerup', 'keydown', 'click']) addEventListener(type, audio.unlock, { capture: true, passive: true });
+
+const battleView = createBattleView({ renderer, post, root: ui.battle, reduceMotion, audio });
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -330,6 +335,7 @@ function renderLine() {
 function advance() {
   const l = dlg.lines[dlg.i];
   if (dlg.shown < l.t.length) { dlg.shown = l.t.length; renderLine(); return; }
+  audio.sfx('next');
   dlg.i++; dlg.shown = 0;
   if (dlg.i < dlg.lines.length) { renderLine(); return; }
   ui.dialogue.hidden = true;
@@ -344,6 +350,7 @@ function joinParty(id) {
   game.party.push(newRecord(id, game.party[0].lv));
   (id === 'mira' ? npcs.florist : npcs.merchant).show(false);
   toast(`${MEMBERS[id].name}加入了隊伍`);
+  audio.sfx('join');
   refreshHud();
 }
 
@@ -386,6 +393,7 @@ function rest(kind) {
     for (const id of [...game.defeated]) if (id.startsWith('w-')) { game.defeated.delete(id); back++; const s = symbolById(id); s.x = s.home[0]; s.z = s.home[1]; }
     game.grace = 2;
     refreshHud(); saveGame();
+    audio.sfx('rest');
     toast(back ? '全員完全回復。附近的影獸又出現了' : '全員完全回復，進度已記錄');
   });
 }
@@ -393,6 +401,7 @@ function openChest(c) {
   game.chests.add(c.id);
   for (const [k, n] of Object.entries(c.items)) game.items[k] = (game.items[k] || 0) + n;
   chestAnim.push({ c, t: 0 });
+  audio.sfx('chest');
   toast('獲得 ' + Object.entries(c.items).map(([k, n]) => `${ITEMS[k].name} ×${n}`).join('、'));
   saveGame();
 }
@@ -429,6 +438,7 @@ async function chapterCard(n) {
   $('chapter-no').textContent = c.no; $('chapter-title').textContent = c.title; $('chapter-sub').textContent = c.sub;
   ui.chapter.hidden = false; ui.chapter.style.animation = 'none'; void ui.chapter.offsetWidth; ui.chapter.style.animation = '';
   clearTimeout(chapterTimer); chapterTimer = setTimeout(() => { ui.chapter.hidden = true; }, 3400);
+  audio.sfx('chapter');
   game.mode = 'cutscene';
   await wait(reduceMotion ? 1200 : 3000);
   game.mode = 'play';
@@ -444,6 +454,7 @@ async function encounter(s) {
   game.mode = 'battle'; keys.clear(); stick.x = stick.z = 0;
   ui.prompt.hidden = true;
   log('戰鬥開始', s.enc);
+  audio.sfx('encounter');
   await wipe(true);
   ui.hud.hidden = true; ui.touch.hidden = true;
   const run = battleView.start({ encounter: s.enc, party: game.party, inventory: game.items, revealed: game.revealed, intro: s.intro });
@@ -475,6 +486,7 @@ let camOverride = null;
 const LIGHTHOUSE_VIEW = new THREE.Vector3(31, 2.4, 25);
 function lightTheLighthouse() {
   game.mode = 'cinematic'; cine.t = 0; cine.active = true;
+  audio.sfx('lighthouse');
   camOverride = LIGHTHOUSE_VIEW;
   ui.hud.hidden = true;
 }
@@ -579,6 +591,7 @@ if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touchi
 function openMenu() {
   if (game.mode !== 'play') return;
   game.mode = 'paused'; keys.clear();
+  audio.sfx('open');
   renderMenuParty();
   ui.menu.showModal();
 }
@@ -591,6 +604,8 @@ $('title-help').addEventListener('click', () => ui.help.showModal());
 document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
 $('restart').addEventListener('click', () => location.reload());
 ui.quality.addEventListener('change', () => { qualityLocked = true; savePref(ui.quality.value); applyQuality(ui.quality.value, '手動選擇'); });
+ui.sound.value = audio.mode;
+ui.sound.addEventListener('change', () => { audio.setMode(ui.sound.value); audio.sfx('confirm'); log('聲音', ui.sound.value); });
 $('end-continue').addEventListener('click', () => { ui.ending.hidden = true; ui.hud.hidden = false; game.mode = 'play'; refreshHud(); });
 // 會清掉存檔的按鈕要按兩次：第一次只改成確認文字
 function confirmTwice(btn, text, run) {
@@ -613,6 +628,7 @@ if (saved) {
 } else ui.start.addEventListener('click', () => startGame(null));
 
 function startGame(save) {
+  audio.sfx('confirm');
   ui.title.hidden = true;
   ui.hud.hidden = false;
   if (document.body.classList.contains('touching')) ui.touch.hidden = false;
@@ -668,6 +684,7 @@ function updatePlayer(dt) {
     if (!game.defeated.has(f.guard)) { contact(symbolById(f.guard)); return; }
     f.got = true; f.g.visible = false; game.found++;
     burst.fire(f.x, f.base + 0.8, f.z);
+    audio.sfx('fragment');
     refreshHud();
     toast(game.found < 3 ? `取得星之碎片（${game.found} / 3）` : '三顆星之碎片都找齊了！回去找守燈人吧');
     log('取得碎片', f.id, game.found);
@@ -779,6 +796,17 @@ function watchPerf(dt) {
   if (perf.slow >= 2) { applyQuality('balanced', `平均 ${Math.round(fps)} FPS`); toast('畫面較慢，已切換為流暢畫質'); }
 }
 
+// 依所在位置與遊戲狀態選配樂；戰鬥中由戰鬥畫面自己切換
+function areaTrack() {
+  const m = game.mode;
+  if (m === 'loading') return null;
+  if (m === 'title' || m === 'ended') return 'title';
+  if (cine.active) return null; // 點燈演出時讓位給點燈的音效
+  if (player.z < -21.5) return 'ruins';
+  if (player.z < -1) return 'forest';
+  return game.flags.finished ? 'title' : 'town';
+}
+
 const timer = new THREE.Timer();
 let firstFrame = true, frames = 0;
 function frame(now) {
@@ -793,6 +821,7 @@ function frame(now) {
     requestAnimationFrame(frame);
     return;
   }
+  audio.music(areaTrack());
   if (game.mode !== 'paused') {
     if (['play', 'dialogue', 'cutscene'].includes(game.mode)) game.playTime += dt;
     updatePlayer(dt);
@@ -802,7 +831,11 @@ function frame(now) {
     for (let i = chestAnim.length - 1; i >= 0; i--) { const a = chestAnim[i]; a.t = Math.min(1, a.t + dt * 2.5); a.c.lid.rotation.x = -1.9 * (1 - Math.pow(1 - a.t, 3)); if (a.t >= 1) chestAnim.splice(i, 1); }
     if (game.mode === 'dialogue') {
       const l = dlg.lines[dlg.i];
-      if (dlg.shown < l.t.length) { dlg.shown = Math.min(l.t.length, dlg.shown + dt * 38); renderLine(); }
+      if (dlg.shown < l.t.length) {
+        const before = Math.floor(dlg.shown);
+        dlg.shown = Math.min(l.t.length, dlg.shown + dt * 38); renderLine();
+        if (Math.floor(dlg.shown) > before && l.t[before].trim()) audio.sfx('text');
+      }
     }
     updateCinematic(dt);
     burst.update(dt);
@@ -848,7 +881,7 @@ window.__hd2d = {
     player: { x: +player.x.toFixed(2), z: +player.z.toFixed(2), y: +player.y.toFixed(2), dir: player.dir }, nearest: nearest?.id === 'rest' ? 'rest-' + nearest.kind : nearest?.id ?? null,
     lit: world.lighthouse.lit, calls: renderer.info.render.calls, frames, playTime: +game.playTime.toFixed(2),
     party: game.party.map(r => ({ id: r.id, lv: r.lv, exp: r.exp, hp: r.hp, sp: r.sp, maxHp: memberStats(r.id, r.lv).hp })), items: { ...game.items }, defeated: [...game.defeated], chests: [...game.chests],
-    battle: battleView.state()
+    battle: battleView.state(), audio: audio.state()
   }),
   teleport(x, z) { player.x = x; player.z = z; player.y = world.groundAt(x, z); },
   battleAuto(v = true) { battleView.auto = v; },

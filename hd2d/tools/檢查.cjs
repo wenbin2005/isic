@@ -98,6 +98,7 @@ async function talk(page, x, z, id) {
   await shot(page, '02-開場對話');
   let s = await until(page, s => s.mode === 'play', '開場對話與第一章標題');
   check('開場後進入第一章', s.chapter === 1 && s.party.length === 1);
+  check('點擊後啟用聲音並播放小鎮配樂', s.audio.ctx === 'running' && s.audio.track === 'town', JSON.stringify(s.audio));
 
   // 移動與地形
   const s0 = await st(page);
@@ -143,6 +144,7 @@ async function talk(page, x, z, id) {
   await shot(page, '04-戰鬥選單');
   const b0 = (await st(page)).battle;
   check('守護碎片的影獸發動戰鬥', b0.enemies.length === 2 && b0.party.length === 2, b0.enemies.map(e => e.name).join('、'));
+  check('戰鬥中換成戰鬥配樂', (await st(page)).audio.track === 'battle', (await st(page)).audio.track);
   const hp0 = b0.enemies.reduce((a, e) => a + e.hp, 0);
   await page.keyboard.press('ArrowRight'); await page.waitForTimeout(200);
   const boosted = await page.evaluate(() => document.querySelector('.b-bval').textContent);
@@ -196,6 +198,7 @@ async function talk(page, x, z, id) {
   await page.waitForTimeout(800);
   await shot(page, '08-霧之森');
   check('進入霧之森觸發劇情', s.flags.forestEntered);
+  check('霧之森換成森林配樂', (await st(page)).audio.track === 'forest', (await st(page)).audio.track);
   await page.evaluate(() => window.__hd2d.teleport(11.6, -9.6));
   s = await until(page, s => s.mode === 'play' && s.flags.campTalk, '營地對話與休息');
   check('營地對話後全員回復', s.party.every(r => r.hp === r.maxHp), s.party.map(r => `${r.hp}/${r.maxHp}`).join('、'));
@@ -203,6 +206,7 @@ async function talk(page, x, z, id) {
   await until(page, s => s.battle?.enemies[0]?.name === '霧狼王', '霧狼王登場', 600000); // 途中碰到遊蕩影獸也會自動打完
   await page.waitForTimeout(2500);
   await shot(page, '09-霧狼王');
+  check('頭目戰換成頭目配樂', (await st(page)).audio.track === 'boss', (await st(page)).audio.track);
   s = await until(page, s => s.mode === 'play' && s.flags.wolfKing, '霧狼王戰', 600000);
   check('打倒霧狼王，霧氣散去', s.defeated.includes('b-wolfKing') && !(await page.evaluate(() => window.__hd2d.blocked(18.5, -20.5))));
 
@@ -212,6 +216,7 @@ async function talk(page, x, z, id) {
   await page.waitForTimeout(800);
   await shot(page, '10-星之古塔');
   check('進入星之古塔並換到第三章', s.chapter === 3);
+  check('星之古塔換成古塔配樂', (await st(page)).audio.track === 'ruins', (await st(page)).audio.track);
   const statue = (await page.evaluate(() => window.__hd2d.places().rest.statue));
   await goNear(page, statue[0], statue[1], 1.1);
   check('星之石像可以休息', (await st(page)).nearest === 'rest-statue', (await st(page)).nearest);
@@ -225,6 +230,7 @@ async function talk(page, x, z, id) {
   await shot(page, '12-結局');
   check('打倒熄星者並看到結局', s.flags.finished && s.lit > 1.2 && await page.isVisible('#ending'), `lit ${s.lit}`);
   check('熄星者血量過半後進入第二階段', phase2);
+  check('結局播放主題曲', (await st(page)).audio.track === 'title', (await st(page)).audio.track);
 
   await page.click('#end-continue');
   await page.waitForTimeout(800);
@@ -232,6 +238,13 @@ async function talk(page, x, z, id) {
   await page.waitForTimeout(300);
   const paused = await page.evaluate(() => ({ mode: window.__hd2d.state().mode, open: document.getElementById('menu').open }));
   check('Esc 開啟暫停選單', paused.mode === 'paused' && paused.open);
+  await page.selectOption('#sound-select', 'sfx'); await page.waitForTimeout(200);
+  const a1 = (await st(page)).audio;
+  await page.selectOption('#sound-select', 'off'); await page.waitForTimeout(300);
+  const a2 = (await st(page)).audio;
+  await page.selectOption('#sound-select', 'all'); await page.waitForTimeout(300);
+  const a3 = (await st(page)).audio;
+  check('選單可以只留音效、關閉聲音再打開', a1.track === null && a2.ctx === 'suspended' && a3.ctx === 'running' && a3.track !== null, [a1, a2, a3].map(a => `${a.mode}/${a.ctx}/${a.track}`).join(' → '));
   await page.selectOption('#quality-select', 'balanced');
   await page.click('#resume');
   await page.waitForTimeout(1200);
