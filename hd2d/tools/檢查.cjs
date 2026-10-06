@@ -283,6 +283,11 @@ async function talk(page, x, z, id) {
   await m.waitForTimeout(500);
   await shot(m, '16-手機戰鬥');
   const mh0 = (await st(m)).battle.enemies.reduce((a, e) => a + e.hp, 0);
+  await m.tap('.b-list .b-item:nth-child(2)'); await m.waitForTimeout(300);
+  const backShown = await m.isVisible('.b-back');
+  if (backShown) await m.tap('.b-back');
+  await m.waitForTimeout(300);
+  check('手機技能選單可以點「返回」回到主選單', backShown && (await st(m)).battle.mode === 'menu' && !(await m.isVisible('.b-back')));
   await m.tap('.b-list button');
   await m.waitForFunction(() => window.__hd2d.state().battle?.mode === 'target', null, { timeout: 10000 });
   await m.tap('.b-tag.targetable', { force: true }); // 名牌跟著鏡頭緩慢晃動，Playwright 會一直判定「不穩定」，所以略過這項等待
@@ -291,6 +296,36 @@ async function talk(page, x, z, id) {
   await m.evaluate(() => window.__hd2d.battleAuto(true));
   const ms = await until(m, s => s.mode === 'play', '手機戰鬥結束');
   check('手機戰鬥結束回到地圖', ms.defeated.includes('g-shrine'));
+  await ctx.close();
+
+  // ---------- 手機橫向：戰鬥選單不能蓋住敵人，暫停選單不用捲動 ----------
+  const lctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const l = await lctx.newPage();
+  l.on('pageerror', e => errors.push('橫向：' + e.message));
+  await l.addInitScript(() => localStorage.setItem('hd2d-quality', 'high'));
+  await l.goto(url, { waitUntil: 'load' });
+  await untilMode(l, ['title'], 90000);
+  await l.tap('#start');
+  await l.evaluate(() => window.__hd2d.battleSpeed(4));
+  for (let i = 0; i < 60 && (await st(l)).mode !== 'play'; i++) { if ((await st(l)).mode === 'dialogue') await l.tap('#dialogue'); await l.waitForTimeout(200); }
+  await l.tap('#menu-btn'); await l.waitForTimeout(500);
+  const lm = await l.evaluate(() => { const d = document.getElementById('menu'); return { scroll: d.scrollHeight > d.clientHeight + 2, out: [...d.querySelectorAll('button, select')].filter(e => e.getBoundingClientRect().bottom > innerHeight).length }; });
+  await shot(l, '17-橫向選單');
+  check('手機橫向的暫停選單不用捲動', !lm.scroll && lm.out === 0, JSON.stringify(lm));
+  await l.tap('#resume'); await l.waitForTimeout(300);
+  await l.evaluate(() => { window.__hd2d.setLevel(5); window.__hd2d.teleport(7.0, 7.1); });
+  await untilMode(l, ['battle'], 30000);
+  await l.waitForFunction(() => window.__hd2d.state().battle?.mode === 'menu', null, { timeout: 60000 });
+  await l.waitForTimeout(800);
+  await shot(l, '18-橫向戰鬥');
+  const covered = await l.evaluate(() => {
+    const m = document.querySelector('.b-menu').getBoundingClientRect();
+    return [...document.querySelectorAll('.b-tag')].filter(t => { const r = t.getBoundingClientRect(); return r.width && r.right > m.left && r.left < m.right && r.bottom > m.top && r.top < m.bottom; }).length;
+  });
+  check('手機橫向的戰鬥選單沒有蓋住敵人名牌', covered === 0, `被蓋住 ${covered} 個`);
+  await l.evaluate(() => window.__hd2d.battleAuto(true));
+  await until(l, s => s.mode === 'play', '橫向戰鬥結束');
+  await lctx.close();
 
   check('沒有頁面錯誤', errors.length === 0, errors.slice(0, 5).join(' | '));
   fs.writeFileSync(`${out}/結果.json`, JSON.stringify({ time: new Date().toISOString(), results, errors }, null, 2));

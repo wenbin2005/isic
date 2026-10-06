@@ -275,7 +275,12 @@ function renderMenuParty() {
 
 let toastTimer;
 function toast(msg) {
-  ui.toast.textContent = msg; ui.toast.classList.add('show');
+  ui.toast.textContent = msg;
+  // 窄螢幕上置中的提示會蓋住左上角的目標欄，這時改放到目標欄下方
+  ui.toast.style.top = '';
+  const hud = ui.hud.hidden ? null : ui.hud.querySelector('.hud-left').getBoundingClientRect();
+  if (hud && (innerWidth - ui.toast.offsetWidth) / 2 < hud.right + 8) ui.toast.style.top = `${Math.round(hud.bottom + 12)}px`;
+  ui.toast.classList.add('show');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => ui.toast.classList.remove('show'), 2800);
 }
 

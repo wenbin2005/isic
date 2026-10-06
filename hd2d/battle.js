@@ -172,7 +172,7 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
     <div class="b-pops" aria-hidden="true"></div>
     <div class="b-dock">
       <div class="b-menu" hidden>
-        <div class="b-menu-head"><strong class="b-actor"></strong>
+        <div class="b-menu-head"><button class="b-back" type="button" hidden>返回</button><strong class="b-actor"></strong>
           <div class="b-boost"><button class="b-bminus" type="button" aria-label="減少蓄力">−</button><span class="b-bval">蓄力 0</span><button class="b-bplus" type="button" aria-label="增加蓄力">+</button></div>
         </div>
         <div class="b-list" role="menu"></div>
@@ -186,7 +186,7 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
   const q$ = s => root.querySelector(s);
   const el = {
     now: q$('.chips.now'), next: q$('.chips.next'), caption: q$('.b-caption'), tags: q$('.b-tags'), pops: q$('.b-pops'),
-    menu: q$('.b-menu'), actor: q$('.b-actor'), bval: q$('.b-bval'), list: q$('.b-list'), desc: q$('.b-desc'), party: q$('.b-party'),
+    menu: q$('.b-menu'), back: q$('.b-back'), actor: q$('.b-actor'), bval: q$('.b-bval'), list: q$('.b-list'), desc: q$('.b-desc'), party: q$('.b-party'),
     result: q$('.b-result'), rEyebrow: q$('.b-result .eyebrow em'), rTitle: q$('.b-result h2'), rBody: q$('.b-result-body'), rActions: q$('.b-result .actions'), flash: q$('.b-flash')
   };
   root.addEventListener('mousedown', e => { if (e.target.closest('button')) e.preventDefault(); }); // 點擊不搶焦點，避免之後按空白鍵重複觸發
@@ -278,6 +278,7 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
     const chip = (u, cur) => `<span class="chip ${u.side}${cur ? ' cur' : ''}${u.broken ? ' broken' : ''}" title="${u.name}">${u.side === 'party' ? SHORT[u.id] : u.name.replace(/\s.*/, '').slice(0, 1) + (u.name.match(/\s(\w)$/)?.[1] || '')}</span>`;
     el.now.innerHTML = (current ? chip(current, true) : '') + p.now.map(u => chip(u)).join('');
     el.next.innerHTML = p.next.map(u => chip(u)).join('');
+    el.next.classList.toggle('clip', el.next.scrollWidth > el.next.clientWidth + 1); // 窄螢幕放不下時，下回合尾端淡出
   }
   function refresh(active = ui.actor) {
     renderParty(active, active && ui.mode !== 'none' ? ui.boost : 0);
@@ -309,15 +310,17 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
   // ---------- 指令選單 ----------
   function showList(items, onBack = null, keepIndex = false) {
     ui.mode = 'menu'; ui.items = items; ui.onBack = onBack; if (!keepIndex) ui.index = Math.max(0, items.findIndex(i => !i.disabled));
-    el.menu.hidden = false;
+    el.menu.hidden = false; el.back.hidden = !onBack;
     el.list.innerHTML = '';
+    el.list.classList.toggle('short', items.every(it => !it.sub)); // 主選單字少，窄畫面排三欄省一列
     items.forEach((it, i) => {
       const btn = document.createElement('button');
       btn.type = 'button'; btn.className = 'b-item'; btn.setAttribute('role', 'menuitem');
       btn.disabled = false; btn.setAttribute('aria-disabled', it.disabled ? 'true' : 'false');
       btn.innerHTML = `<span class="l">${it.tag ? `<em class="tag t-${it.tagType || ''}">${it.tag}</em>` : ''}${it.label}</span>${it.sub ? `<span class="s">${it.sub}</span>` : ''}`;
-      btn.addEventListener('click', () => { ui.index = i; pickCurrent(); });
-      btn.addEventListener('mouseenter', () => { if (ui.index !== i) audio.sfx('cursor'); ui.index = i; highlight(); });
+      btn.addEventListener('click', () => { ui.index = i; highlight(); pickCurrent(); }); // 觸控沒有滑過的高亮，點下時先把游標移過來
+      // 只有滑鼠移入才換選項；觸控的相容事件會在 click 前先觸發，說明文字行數一變，選單位移，這一下就會點空
+      btn.addEventListener('pointerenter', e => { if (e.pointerType !== 'mouse') return; if (ui.index !== i) audio.sfx('cursor'); ui.index = i; highlight(); });
       el.list.append(btn);
     });
     highlight();
@@ -356,7 +359,9 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
       ui.allTargets = kind === 'enemies' || kind === 'allies';
       ui.tIndex = 0; ui.mode = 'target'; ui.tResolve = resolve; ui.tBack = back;
       el.list.querySelectorAll('.b-item').forEach(c => c.classList.add('dim'));
-      el.desc.textContent = ui.allTargets ? '對全體使用。按空白鍵確定。' : '選擇目標：方向鍵切換，空白鍵確定，或直接點選。';
+      el.back.hidden = false;
+      const touch = document.body.classList.contains('touching');
+      el.desc.textContent = ui.allTargets ? (touch ? '對全體使用。點任一個目標確定。' : '對全體使用。按空白鍵確定。') : (touch ? '點一下要選的目標。' : '選擇目標：方向鍵切換，空白鍵確定，或直接點選。');
       refresh();
     });
   }
@@ -377,6 +382,12 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
     const r = ui.tResolve; ui.tResolve = null; ui.targets = []; ui.mode = 'menu';
     r({ ok: false });
   }
+  // 返回上一層：選目標時取消，子選單時回到主選單（鍵盤 Esc 與畫面上的「返回」共用）
+  function goBack() {
+    if (ui.mode === 'target') cancelTarget();
+    else if (ui.mode === 'menu' && ui.onBack) { audio.sfx('cancel'); ui.onBack(); }
+  }
+  el.back.addEventListener('click', goBack);
 
   function chooseCommand(u) {
     return new Promise(resolve => {
@@ -447,7 +458,7 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
       if (left) setBoost(-1);
       if (right) setBoost(1);
       if (confirm) pickCurrent();
-      if (back && ui.onBack) { audio.sfx('cancel'); ui.onBack(); }
+      if (back) goBack();
     } else if (ui.mode === 'target') {
       const n = ui.targets.length;
       if (!ui.allTargets && n) {
@@ -455,7 +466,7 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
         if (down || right) { ui.tIndex = (ui.tIndex + 1) % n; if (n > 1) audio.sfx('cursor'); refresh(); }
       }
       if (confirm) confirmTarget();
-      if (back) cancelTarget();
+      if (back) goBack();
     }
   });
 
@@ -564,8 +575,12 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
     camera.position.set(0, 1.1 + dist * 0.27, dist);
     look.set(0, portrait ? 0.2 - dist * 0.04 : 1.0, 0);
     camera.lookAt(look);
-    // 直向畫面的下半部會被選單與隊伍欄蓋住，把整個舞台往上移
-    if (portrait) camera.setViewOffset(innerWidth, innerHeight, 0, innerHeight * 0.12, innerWidth, innerHeight);
+    // 直向畫面與矮的橫向畫面（手機橫拿），下半部會被選單與隊伍欄蓋住，把整個舞台往上移
+    // 直向時選單加隊伍欄約佔下方 380px，沒抬時角色腳底約在畫面 46% 高。抬到腳底露出選單上方，
+    // 但不要抬到敵人名牌（連同怪物身高約 245px）頂到字幕；很矮的手機兩者顧不全時，以露出角色為先。
+    const H = innerHeight, feet = 0.464 - (H - 380) / H, tagRoom = (0.464 * H - 245) / H;
+    const lift = portrait ? Math.max(feet, Math.min(0.12, tagRoom)) : H < 520 ? 0.08 : 0;
+    if (lift) camera.setViewOffset(innerWidth, innerHeight, 0, innerHeight * lift, innerWidth, innerHeight);
     else camera.clearViewOffset();
     camera.updateProjectionMatrix(); camera.updateMatrixWorld();
     view.focusY = tmpV.set(0, 0.8, 0).project(camera).y * 0.5 + 0.5; // 景深清晰帶對準舞台中央
@@ -728,8 +743,13 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
     if (stage?.decor === 'sea') decor.sea.userData.water.offset.set(time * 0.012, Math.sin(time * 0.3) * 0.01);
     if (captionTimer > 0) { captionTimer -= dt; if (captionTimer <= 0) el.caption.classList.remove('show'); }
     // 敵人頭上的標籤跟著畫面位置走；頭目太高時往下壓，避免蓋住上方的行動順序列
-    if (b && tagMinY === null) { const r = root.querySelector('.b-order').getBoundingClientRect(); if (r.height) tagMinY = r.bottom + 8; }
-    // 名牌互相重疊時，把後排的往上推（推不上去就放到前排下方）
+    if (b && tagMinY === null) {
+      // 名牌也不要壓到行動順序列下方的說明字幕（字幕以一行的高度估算）
+      const r = root.querySelector('.b-order').getBoundingClientRect(), c = el.caption.getBoundingClientRect(), cs = getComputedStyle(el.caption);
+      const capBottom = c.top + parseFloat(cs.fontSize) * 1.5 + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      if (r.height) tagMinY = Math.max(r.bottom, capBottom) + 6;
+    }
+    // 名牌互相重疊時，把後排的往上推（推不上去就往旁邊挪，再不行才放到前排下方）
     if (b) {
       const placed = [];
       for (const u of b.enemies) {
@@ -744,7 +764,10 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
           const o = placed[j];
           if (Math.abs(t.x - o.x) > (t.v.tagW + o.v.tagW) / 2 + 4 || t.y - t.v.tagH > o.y + 4 || t.y < o.y - o.v.tagH - 4) continue;
           const up = o.y - o.v.tagH - 6;
-          t.y = up - t.v.tagH >= (tagMinY ?? 0) ? up : o.y + t.v.tagH + 6;
+          if (up - t.v.tagH >= (tagMinY ?? 0)) { t.y = up; continue; }
+          // 矮的橫向手機上面放不下，放到前排下方會蓋住敵人又壓到選單，所以先試著往旁邊挪
+          const half = t.v.tagW / 2, sx = o.x + Math.sign(t.x - o.x || -1) * ((t.v.tagW + o.v.tagW) / 2 + 6);
+          if (sx - half >= 4 && sx + half <= innerWidth - 4) t.x = sx; else t.y = o.y + t.v.tagH + 6;
         }
         t.v.tag.style.transform = `translate(${t.x}px, ${t.y}px) translate(-50%, -100%)`;
       });

@@ -63,7 +63,7 @@ kbd { font-family: var(--sans); font-size: 0.78em; padding: 0.1em 0.5em; border:
 .error p { max-width: 32rem; line-height: 1.9; color: var(--muted); }
 
 /* ---------- 遊戲介面 ---------- */
-.hud { position: fixed; top: calc(14px + var(--safe-t)); left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: flex-start; z-index: 10; pointer-events: none; animation: fade 0.8s ease both; }
+.hud { position: fixed; top: calc(14px + var(--safe-t)); left: calc(16px + env(safe-area-inset-left, 0px)); right: calc(16px + env(safe-area-inset-right, 0px)); display: flex; justify-content: space-between; align-items: flex-start; z-index: 10; pointer-events: none; animation: fade 0.8s ease both; }
 .hud > * { pointer-events: auto; }
 .objective { position: relative; max-width: min(380px, calc(100vw - 92px)); padding: 0.75rem 1.1rem 0.8rem 1.1rem; background: linear-gradient(90deg, rgba(12, 16, 32, 0.88), rgba(12, 16, 32, 0.55)); border-left: 2px solid var(--gold); backdrop-filter: blur(4px); }
 .objective .label { font-family: var(--serif); font-size: 0.72rem; letter-spacing: 0.32em; color: var(--gold); }
@@ -92,6 +92,11 @@ kbd { font-family: var(--sans); font-size: 0.78em; padding: 0.1em 0.5em; border:
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 /* ---------- 觸控 ---------- */
+/* 避免 iOS 快速連點時被當成雙擊放大 */
+button, select, dialog, .dialogue, .b-tag, .b-mem { touch-action: manipulation; }
+body.touching .b-boost button { width: 38px; height: 38px; }
+body.touching .b-back { min-height: 38px; }
+body.touching .b-hint { display: none; }
 .touch { position: fixed; inset: 0; z-index: 8; pointer-events: none; }
 .stick-zone { position: absolute; left: 0; bottom: 0; width: 50%; height: 62%; pointer-events: auto; touch-action: none; }
 .stick { position: absolute; left: 0; top: 0; width: 120px; height: 120px; border-radius: 50%; border: 1px solid rgba(217, 181, 106, 0.35); background: radial-gradient(circle, rgba(15, 20, 38, 0.15), rgba(15, 20, 38, 0.45)); opacity: 0; transition: opacity 0.2s; pointer-events: none; display: grid; place-items: center; }
@@ -148,7 +153,8 @@ dialog.panel h2 { font-family: var(--serif); letter-spacing: 0.3em; text-align: 
 .battle { position: fixed; inset: 0; z-index: 11; pointer-events: none; font-size: 0.92rem; }
 .battle > * { pointer-events: auto; }
 .battle .b-tags, .battle .b-pops, .battle .b-flash { pointer-events: none; }
-.b-order { position: absolute; top: calc(14px + var(--safe-t)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 0.45rem 0.9rem; background: rgba(10, 13, 28, 0.78); border: 1px solid rgba(217, 181, 106, 0.3); backdrop-filter: blur(4px); white-space: nowrap; max-width: calc(100vw - 24px); overflow: hidden; }
+.b-order { position: absolute; top: calc(14px + var(--safe-t)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 0.45rem 0.9rem; background: rgba(10, 13, 28, 0.78); border: 1px solid rgba(217, 181, 106, 0.3); backdrop-filter: blur(4px); white-space: nowrap; width: max-content; max-width: calc(100vw - 24px); overflow: hidden; }
+.b-order > * { flex-shrink: 0; }
 .b-order .lbl { font-family: var(--serif); font-size: 0.7rem; letter-spacing: 0.2em; color: var(--gold); }
 .b-order .next-lbl { margin-left: 6px; padding-left: 12px; border-left: 1px solid rgba(217, 181, 106, 0.3); color: var(--muted); }
 .chips { display: flex; gap: 5px; }
@@ -158,6 +164,9 @@ dialog.panel h2 { font-family: var(--serif); letter-spacing: 0.3em; text-align: 
 .chip.cur { transform: scale(1.22); box-shadow: 0 0 14px rgba(255, 214, 140, 0.6); }
 .chip.broken { opacity: 0.4; text-decoration: line-through; }
 .chips.next .chip { opacity: 0.6; width: 24px; height: 24px; }
+.chips.next { flex-shrink: 1; min-width: 0; overflow: hidden; }
+.chips.next .chip { flex-shrink: 0; }
+.chips.next.clip { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent); }
 .b-caption { position: absolute; top: calc(66px + var(--safe-t)); left: 50%; transform: translate(-50%, -6px); margin: 0; padding: 0.45rem 2.4rem; font-family: var(--serif); font-size: 1.05rem; letter-spacing: 0.14em; white-space: nowrap; background: linear-gradient(90deg, transparent, rgba(10, 13, 28, 0.88) 18%, rgba(10, 13, 28, 0.88) 82%, transparent); opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; }
 .b-caption.show { opacity: 1; transform: translate(-50%, 0); }
 .b-tag { position: absolute; left: 0; top: 0; display: grid; gap: 4px; justify-items: center; padding: 0.3rem 0.55rem 0.4rem; background: rgba(10, 13, 28, 0.72); border: 1px solid rgba(154, 132, 224, 0.4); cursor: default; pointer-events: auto; transition: border-color 0.2s, box-shadow 0.2s; }
@@ -193,12 +202,15 @@ dialog.panel h2 { font-family: var(--serif); letter-spacing: 0.3em; text-align: 
 .b-flash.go { animation: flash 0.45s ease-out; }
 @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
 
-.b-dock { position: absolute; left: 16px; right: 16px; bottom: calc(16px + var(--safe-b)); display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; pointer-events: none; }
+.b-dock { position: absolute; left: calc(16px + env(safe-area-inset-left, 0px)); right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(16px + var(--safe-b)); display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; pointer-events: none; }
 .b-dock > * { pointer-events: auto; }
 .b-menu, .b-party { background: linear-gradient(180deg, rgba(18, 23, 46, 0.93), rgba(10, 13, 28, 0.95)); border: 1px solid var(--gold-soft); box-shadow: inset 0 0 0 3px rgba(10, 13, 28, 0.9), inset 0 0 0 4px rgba(217, 181, 106, 0.18), 0 14px 34px rgba(0, 0, 0, 0.5); }
 .b-menu { width: min(340px, 46vw); padding: 0.8rem 0.8rem 0.6rem; animation: dlg 0.25s ease; }
 .b-menu-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 0 0.3rem 0.55rem; margin-bottom: 0.4rem; border-bottom: 1px solid rgba(217, 181, 106, 0.22); }
-.b-actor { font-family: var(--serif); font-weight: 500; letter-spacing: 0.15em; color: #fff1cf; }
+.b-actor { font-family: var(--serif); font-weight: 500; letter-spacing: 0.15em; color: #fff1cf; margin-right: auto; }
+.b-back { padding: 0.3rem 0.8rem 0.3rem 0.65rem; border: 1px solid var(--gold-soft); background: rgba(217, 181, 106, 0.1); font-family: var(--serif); font-size: 0.82rem; letter-spacing: 0.12em; cursor: pointer; }
+.b-back::before { content: "‹"; margin-right: 0.35em; color: var(--gold); }
+.b-back:hover { background: rgba(217, 181, 106, 0.25); }
 .b-boost { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--gold); transition: opacity 0.2s; }
 .b-boost.dim { opacity: 0.35; }
 .b-boost button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--gold-soft); background: rgba(217, 181, 106, 0.1); cursor: pointer; line-height: 1; }
@@ -263,13 +275,73 @@ dialog.panel h2 { font-family: var(--serif); letter-spacing: 0.3em; text-align: 
   .b-menu { padding: 0.6rem 0.6rem 0.45rem; }
   .b-menu-head { padding-bottom: 0.4rem; margin-bottom: 0.3rem; }
   .b-list { grid-template-columns: 1fr 1fr; max-height: 30vh; }
-  .b-item { padding: 0.5rem 0.6rem; }
+  .b-list.short { grid-template-columns: repeat(3, 1fr); }
+  .b-item { padding: 0.5rem 0.6rem; min-height: 40px; }
   .b-hint { display: none; }
-  .b-desc { min-height: 0; margin: 0.35rem 0.3rem 0.1rem; font-size: 0.76rem; line-height: 1.55; }
+  .b-desc { min-height: 3.1em; margin: 0.35rem 0.3rem 0.1rem; font-size: 0.76rem; line-height: 1.55; } /* 預留兩行，換選項時選單不跳動 */
   .b-caption { font-size: 0.92rem; padding: 0.4rem 1.6rem; top: calc(60px + var(--safe-t)); white-space: normal; width: max-content; max-width: calc(100vw - 24px); text-align: center; }
   .b-name { font-size: 0.72rem; }
   .chip { width: 24px; height: 24px; font-size: 0.7rem; }
   .chips.next .chip { width: 20px; height: 20px; }
+  .chip.enemy { font-size: 0.6rem; } /* 「荊A」這種兩個字的才塞得進小圓 */
+  .chips.next .chip.enemy { font-size: 0.55rem; }
+  .b-order { gap: 6px; padding: 0.4rem 0.6rem; }
+  .b-order .lbl { letter-spacing: 0.05em; }
+  .b-order .next-lbl { margin-left: 2px; padding-left: 8px; }
+  .chips { gap: 4px; }
+}
+/* 矮的直向畫面（小手機）：暫停選單收緊，盡量不用捲動 */
+@media (max-height: 700px) and (orientation: portrait) {
+  dialog.panel { padding: 1.2rem 1.2rem 1.1rem; }
+  dialog.panel h2 { margin-bottom: 0.9rem; }
+  .menu-party { gap: 0.35rem; margin-bottom: 0.9rem; font-size: 0.8rem; }
+  .menu-party .row { padding: 0.4rem 0.7rem; }
+  .panel-actions { gap: 0.55rem; grid-template-columns: 1fr 1fr; }
+  .panel-actions .btn { padding: 0.65em 1.4em; grid-column: 1 / -1; } /* 畫質與聲音並排 */
+  .field select { padding: 0.5rem 0.6rem; min-width: 0; }
+  .field { min-width: 0; }
+}
+/* 矮的橫向畫面（手機橫拿）：標題、對話框、暫停選單與戰鬥介面都改成扁的排法 */
+@media (max-height: 520px) and (orientation: landscape) {
+  .title-inner, .ending-inner { padding: 0.8rem 1.5rem; }
+  .title h1 { font-size: clamp(2.6rem, 17vh, 4.4rem); }
+  .tagline { line-height: 1.7; margin: 0.3rem 0 1rem; }
+  .meta { margin-top: 0.9rem; }
+  .ending h2 { margin: 0.4rem 0; }
+  .ending p { line-height: 1.7; }
+  .ending .time { margin: 0.5rem 0 1rem; }
+  body.touching .dialogue { bottom: calc(12px + var(--safe-b)); width: min(640px, calc(100vw - 280px)); min-height: 0; padding: 1.1rem 1.2rem 1rem; }
+  #dialogue-text { font-size: 1rem; line-height: 1.75; min-height: 3.5em; }
+  dialog.panel { padding: 1rem 1.2rem; }
+  dialog.panel h2 { margin-bottom: 0.7rem; font-size: 1.2rem; }
+  #menu[open] { width: min(720px, calc(100vw - 32px)); display: grid; grid-template-columns: 1fr 1fr; column-gap: 1.2rem; align-items: start; }
+  /* 標題與隊伍放左欄，右欄的按鈕從頂端開始排 */
+  #menu h2 { grid-column: 1; grid-row: 1; text-align: left; margin-left: 0.2rem; }
+  #menu .menu-party { grid-column: 1; grid-row: 2; margin: 0; font-size: 0.8rem; }
+  #menu .panel-actions { grid-column: 2; grid-row: 1 / span 2; }
+  .menu-party .row { padding: 0.4rem 0.7rem; }
+  .panel-actions { gap: 0.5rem; }
+  .panel-actions .btn { padding: 0.6em 1.2em; }
+  .field { gap: 0.25rem; font-size: 0.8rem; }
+  .field select { padding: 0.55rem 0.6rem; }
+  .b-order { top: calc(6px + var(--safe-t)); padding: 0.25rem 0.7rem; }
+  .chip { width: 24px; height: 24px; font-size: 0.7rem; }
+  .chips.next .chip { width: 20px; height: 20px; }
+  .chip.enemy { font-size: 0.6rem; } /* 「荊A」這種兩個字的才塞得進小圓 */
+  .chips.next .chip.enemy { font-size: 0.55rem; }
+  .b-caption { top: calc(44px + var(--safe-t)); font-size: 0.88rem; padding: 0.3rem 1.8rem; }
+  .b-dock { bottom: calc(6px + var(--safe-b)); left: calc(10px + env(safe-area-inset-left, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); gap: 10px; }
+  .b-menu { width: min(380px, 46vw); padding: 0.45rem 0.5rem 0.35rem; }
+  .b-menu-head { padding: 0 0.2rem 0.3rem; margin-bottom: 0.25rem; }
+  .b-list { grid-template-columns: 1fr 1fr; max-height: none; }
+  .b-list.short { grid-template-columns: repeat(3, 1fr); }
+  .b-item { padding: 0.35rem 0.5rem; min-height: 36px; font-size: 0.85rem; letter-spacing: 0.05em; }
+  .b-item .s { font-size: 0.7rem; }
+  .b-desc { min-height: 2.9em; margin: 0.25rem 0.2rem 0; font-size: 0.72rem; line-height: 1.45; }
+  .b-party { width: min(360px, 42vw); padding: 0.3rem; gap: 2px; }
+  .b-mem { padding: 0.2rem 0.5rem; grid-template-columns: 4.6em 1fr; font-size: 0.82rem; }
+  .b-mem .num { font-size: 0.68rem; }
+  .b-mem .nm small { font-size: 0.64rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
