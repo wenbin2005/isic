@@ -9,6 +9,14 @@ const scenes = {
 };
 const params = new URLSearchParams(location.search);
 const forced3D = params.get('mode') === '3d';
+// WebGPU 試點：瀏覽器支援時森林改走 WebGPU 管線；?gpu=0 可強制使用原本的 WebGL 版本對照。
+const gpuAllowed = params.get('gpu') !== '0' && 'gpu' in navigator;
+let gpuAdapter = null, explorerGpu = false;
+async function hasWebGPU() {
+  if (!gpuAllowed) return false;
+  if (gpuAdapter === null) { try { gpuAdapter = Boolean(await navigator.gpu.requestAdapter()); } catch { gpuAdapter = false; } }
+  return gpuAdapter;
+}
 const coarse = matchMedia('(pointer: coarse)');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let explorer = null, current = 'forest', running = true, exploring = false, activeMode = 'loading';
@@ -82,8 +90,15 @@ async function start3D() {
     const probe = document.createElement('canvas'), context = probe.getContext('webgl2', { failIfMajorPerformanceCaveat:false });
     if (!context) throw new Error('這個瀏覽器未提供 WebGL2，已為你使用原版靜態體驗。');
     context.getExtension('WEBGL_lose_context')?.loseContext();
-    const { createExplorer } = await import('./engine.js');
-    const created = await createExplorer({ canvas:$('world'), scene:current, quality, onStats:statsUpdate, onFailure:message => { if (activeMode === '3d' || activeMode === 'loading') useClassic(`3D 場景暫時無法繼續：${message}。已保留原版靜態體驗。`, false); } });
+    const { createExplorer, GPU_SCENES } = await import('./engine.js');
+    const onFailure = message => { if (activeMode === '3d' || activeMode === 'loading') useClassic(`3D 場景暫時無法繼續：${message}。已保留原版靜態體驗。`, false); };
+    let created = null;
+    if (GPU_SCENES.has(current) && await hasWebGPU()) {
+      // WebGPU 啟動失敗不算 3D 失敗：換一張新畫布改走 WebGL，不打擾使用者。
+      try { created = await createExplorer({ canvas:$('world'), scene:current, quality, gpu:await import('./gpu.js'), onStats:statsUpdate, onFailure }); explorerGpu = true; }
+      catch (error) { console.warn('WebGPU 管線無法啟動，改用 WebGL：', error); gpuAdapter = false; freshCanvas(); }
+    }
+    if (!created) { created = await createExplorer({ canvas:$('world'), scene:current, quality, onStats:statsUpdate, onFailure }); explorerGpu = false; }
     if (activeMode === 'classic') { created.dispose(); return; }
     if (!created.getState().ready) { created.dispose(); throw new Error('3D 場景尚未就緒，已使用原版靜態體驗。'); }
     explorer = created; activeMode = '3d'; running = true;
@@ -96,8 +111,22 @@ async function start3D() {
     if (retryRequested) { retryRequested = false; if (activeMode === 'classic') start3D(); }
   }
 }
+/** 畫布一旦取得 WebGPU 或 WebGL context 就不能換另一種；切換引擎時換一張同屬性的新畫布。 */
+function freshCanvas() {
+  const old = $('world'), canvas = old.cloneNode(false);
+  old.replaceWith(canvas);
+}
 async function switchScene(key) {
   if (!scenes[key] || switching || !explorer) return;
+  const { GPU_SCENES } = await import('./engine.js');
+  if (explorerGpu !== (GPU_SCENES.has(key) && await hasWebGPU())) {
+    // 森林（WebGPU）與其他三景（WebGL）之間切換：重建引擎。
+    switching = true; resetInput();
+    explorer.dispose(); explorer = null; freshCanvas();
+    current = key; updateSceneUI();
+    try { await start3D(); } finally { switching = false; }
+    return;
+  }
   switching = true; resetInput();
   const previous = current;
   $('loading-note').textContent = '正在走向下一處景色…'; $('loading-note').hidden = false;
