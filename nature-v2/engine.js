@@ -5,8 +5,8 @@ import { createAtmosphere, addAtmosphere, skyMaterial, creekMaterial, oceanMater
 import { cutBrushes, leafBrushes, drawLeafCluster, drawPineBranch, drawPineSnow, drawPineSilhouette, drawGrass, drawFern, drawLitter, toTexture } from './foliage.js';
 
 const SCENES = new Set(['forest', 'ocean', 'autumn', 'snow']);
-// WebGPU 試點只移植了森林用到的材質；其餘三景仍走 WebGL（app.js 依場景選擇引擎）。
-export const GPU_SCENES = new Set(['forest']);
+// 四景都已移植到 WebGPU；保留這份清單，日後若有場景只支援 WebGL，app.js 仍會依場景選擇引擎。
+export const GPU_SCENES = new Set(['forest', 'ocean', 'autumn', 'snow']);
 // 葉叢改為「整簇」卡片後，近景樹冠卡片數約為舊版的四分之一；省下的預算用在遠景、光束與地被。
 const TIERS = {
   high: { trees: 200, cards: 180, whorls: 12, grass: 6500, ferns: 240, farTrees: 900, shafts: 20, motes: 360, snowflakes: 2600, fallingLeaves: 240, litter: 700, shadow: 2048, shadowRadius: 2.5, ratio: 1.5, segments: 160, rings: 56, ocean: [150, 170] },
@@ -433,7 +433,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
       normalScale: new THREE.Vector2(snow ? 0.25 : 0.7, snow ? 0.25 : 0.7), roughness: snow ? 0.8 : 0.95, metalness: 0, vertexColors: true, envMapIntensity: 1,
       aoMap: detailTexture, aoMapIntensity: 1,
     });
-    if (gpu) return gpu.patchGround(material, look, { map: textures.get('ground'), detail: detailTexture, pathMap: textures.get('sand'), repeat: 26 });
+    if (gpu) return gpu.patchGround(material, look, { map: material.map, detail: detailTexture, pathMap: textures.get('sand'), repeat: sand ? 22 : 26, key, sky: sky3d });
     material.defines = { ...sceneDefine(key), TRAIL_TINT: look.trail, CANOPY_DARK: look.canopy[0], CANOPY_LIGHT: look.canopy[1], CANOPY_AMOUNT: look.canopy[2], ROCK_TINT: look.rock, PEAK_SNOW: look.peak };
     return patched(material, 'ground', shader => patchGround(shader, atmo, textures.get('sand')));
   }
@@ -514,7 +514,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
   /** 近景樹：闊葉樹以數個葉團組成不規則樹冠；松樹為層層下垂的枝葉，雪林再覆上積雪。 */
   function forestTrees(key, tier, rand, placements, mark) {
     const pine = key === 'snow', barkColor = pine ? '#8f887a' : '#c2b6a2';
-    const trunkMaterial = gpu ? gpu.patchBark(standard('bark', barkColor)) : patched(standard('bark', barkColor), 'bark', shader => patchBark(shader, atmo));
+    const trunkMaterial = gpu ? gpu.patchBark(standard('bark', barkColor), key) : patched(standard('bark', barkColor), 'bark', shader => patchBark(shader, atmo));
     if (!gpu) trunkMaterial.defines = sceneDefine(key);
     const trunkGeometry = new THREE.CylinderGeometry(pine ? 0.18 : 0.46, 1, 1, 14, 12);
     const trunkPositions = trunkGeometry.attributes.position;
@@ -736,7 +736,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
   function rocks(key, rand, mark) {
     const count = key === 'ocean' ? 49 : 72;
     const rockBase = standard('rock', '#ffffff', { envMapIntensity: 1, normalScale: new THREE.Vector2(0.9, 0.9), roughness: key === 'ocean' ? 0.8 : 0.92 });
-    const material = gpu ? gpu.patchRock(rockBase) : patched(rockBase, 'rock', shader => patchRock(shader, atmo));
+    const material = gpu ? gpu.patchRock(rockBase, key) : patched(rockBase, 'rock', shader => patchRock(shader, atmo));
     material.color.setRGB(1.55, 1.5, 1.42); // 原始 dark_rock 貼圖偏黑，提亮成自然岩色
     if (!gpu) material.defines = sceneDefine(key);
     const shapes = [0, 1, 2].map(() => {
@@ -844,7 +844,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setIndex(indices); geometry.computeVertexNormals();
-    const material = patched(new THREE.MeshStandardMaterial({ map, alphaTest: 0.5, alphaToCoverage: true, roughness: 0.92, metalness: 0, envMapIntensity: 0.8, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), 'atmosphere', shader => addAtmosphere(shader, atmo));
+    const material = patched(new StandardMaterial({ map, alphaTest: 0.5, alphaToCoverage: !gpu, roughness: 0.92, metalness: 0, envMapIntensity: 0.8, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), 'atmosphere', shader => addAtmosphere(shader, atmo));
     const mesh = new THREE.Mesh(geometry, material);
     mesh.receiveShadow = true;
     world.add(mesh);
@@ -889,7 +889,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setIndex(indices);
     const water = LOOKS.ocean.water;
-    const mesh = new THREE.Mesh(geometry, oceanMaterial(atmo, water));
+    const mesh = new THREE.Mesh(geometry, gpu ? gpu.oceanMaterial(sky3d, water) : oceanMaterial(atmo, water));
     mesh.position.y = -0.17;
     mesh.frustumCulled = false;
     world.add(mesh);
@@ -907,7 +907,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
     geometry.setAttribute('flight', new THREE.InstancedBufferAttribute(new Float32Array(flight), 4));
     geometry.setAttribute('flightExtra', new THREE.InstancedBufferAttribute(new Float32Array(extra), 2));
     geometry.instanceCount = count;
-    const mesh = new THREE.Mesh(geometry, birdMaterial(atmo, '#3b3f45'));
+    const mesh = new THREE.Mesh(geometry, gpu ? gpu.birdMaterial(sky3d, '#3b3f45') : birdMaterial(atmo, '#3b3f45'));
     mesh.frustumCulled = false; mesh.visible = !reducedMotion;
     world.add(mesh); particles.push(mesh);
   }
@@ -950,16 +950,20 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
 
   /** 天候粒子：雪林飄雪、秋林落葉、森林與秋林的光中浮塵；全由 GPU 依時間計算，跟隨相機。 */
   function weather(key, tier, rand) {
-    if (key === 'snow') particleField(tier.snowflakes, rand, snowMaterial(atmo, { color: '#f3f8fb', box: [46, 22, 46], size: 0.045 }));
+    const addSprite = sprite => { sprite.visible = !reducedMotion; world.add(sprite); particles.push(sprite); };
+    const snow = { color: '#f3f8fb', box: [46, 22, 46], size: 0.045 };
+    if (key === 'snow') {
+      if (gpu) addSprite(gpu.snowSprites(sky3d, { count: tier.snowflakes, rand, ...snow }));
+      else particleField(tier.snowflakes, rand, snowMaterial(atmo, snow));
+    }
     if (key === 'autumn') {
       const colors = new Float32Array(tier.fallingLeaves * 3), choices = ['#e8a028', '#d9661c', '#b8321c', '#f2c240', '#9c5a22'].map(value => new THREE.Color(value));
       for (let i = 0; i < tier.fallingLeaves; i++) choices[Math.floor(rand() * choices.length)].toArray(colors, i * 3);
-      particleField(tier.fallingLeaves, rand, fallingLeafMaterial(atmo, { box: [40, 18, 40], size: 0.16 }), { name: 'leafColor', attribute: new THREE.BufferAttribute(colors, 3) });
+      if (gpu) addSprite(gpu.leafSprites(sky3d, { count: tier.fallingLeaves, rand, colors, box: [40, 18, 40], size: 0.16 }));
+      else particleField(tier.fallingLeaves, rand, fallingLeafMaterial(atmo, { box: [40, 18, 40], size: 0.16 }), { name: 'leafColor', attribute: new THREE.BufferAttribute(colors, 3) });
     }
-    if (gpu && key === 'forest') {
-      const sprite = gpu.moteSprites(sky3d, { count: tier.motes, rand, color: displayColor(LOOKS.forest.motes, 0.9), box: [34, 9, 34], size: 0.025 });
-      sprite.visible = !reducedMotion;
-      world.add(sprite); particles.push(sprite);
+    if (gpu && (key === 'forest' || key === 'autumn')) {
+      addSprite(gpu.moteSprites(sky3d, { count: key === 'autumn' ? Math.round(tier.motes * 0.6) : tier.motes, rand, color: displayColor(LOOKS[key].motes, 0.9), box: [34, 9, 34], size: 0.025 }));
       return;
     }
     if (key === 'forest' || key === 'autumn') {
