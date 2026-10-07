@@ -5,6 +5,8 @@ import { createAtmosphere, addAtmosphere, skyMaterial, creekMaterial, oceanMater
 import { cutBrushes, leafBrushes, drawLeafCluster, drawPineBranch, drawPineSnow, drawPineSilhouette, drawGrass, drawFern, drawLitter, toTexture } from './foliage.js';
 
 const SCENES = new Set(['forest', 'ocean', 'autumn', 'snow']);
+// WebGPU 試點只移植了森林用到的材質；其餘三景仍走 WebGL（app.js 依場景選擇引擎）。
+export const GPU_SCENES = new Set(['forest']);
 // 葉叢改為「整簇」卡片後，近景樹冠卡片數約為舊版的四分之一；省下的預算用在遠景、光束與地被。
 const TIERS = {
   high: { trees: 200, cards: 180, whorls: 12, grass: 6500, ferns: 240, farTrees: 900, shafts: 20, motes: 360, snowflakes: 2600, fallingLeaves: 240, litter: 700, shadow: 2048, shadowRadius: 2.5, ratio: 1.5, segments: 160, rings: 56, ocean: [150, 170] },
@@ -138,10 +140,12 @@ function randomDirection(rand, target = new THREE.Vector3()) {
   return target.set(Math.cos(a) * r, y, Math.sin(a) * r);
 }
 
-/** 真實地形上的第一人稱探索；介面僅處理移動與渲染，降級選擇由使用者介面負責。 */
-export async function createExplorer({ canvas, scene: initialScene = 'forest', quality = 'high', onStats = () => {}, onFailure = () => {} }) {
+/** 真實地形上的第一人稱探索；介面僅處理移動與渲染，降級選擇由使用者介面負責。
+    gpu 為 gpu.js 模組時改用 WebGPU 渲染器、TSL 材質、物理天空與 TAA（僅限 GPU_SCENES）。 */
+export async function createExplorer({ canvas, scene: initialScene = 'forest', quality = 'high', gpu = null, onStats = () => {}, onFailure = () => {} }) {
   if (!(canvas instanceof HTMLCanvasElement)) throw new TypeError('探索畫布不存在。');
   if (!SCENES.has(initialScene)) throw new RangeError('不支援這個自然場景。');
+  if (gpu && !GPU_SCENES.has(initialScene)) throw new RangeError('WebGPU 試點尚未支援這個自然場景。');
   if (!TIERS[quality]) throw new RangeError('不支援這個畫質。');
 
   let disposed = false;
@@ -194,18 +198,24 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
   };
   let renderer;
   try {
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
+    renderer = gpu ? await gpu.createRenderer(canvas) : new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
   } catch (error) {
     onFailure(`這個裝置無法啟動 3D：${error.message}`);
     throw error;
   }
+  const backend = gpu ? (renderer.backend.isWebGPUBackend ? 'webgpu' : 'webgl2-node') : 'webgl';
+  if (gpu) renderer.info.autoReset = false; // 一幀有場景、TAA、輸出數次 render，改為每幀手動歸零才看得到整幀的 draw calls
+  const maxAnisotropy = gpu ? renderer.getMaxAnisotropy() : renderer.capabilities.getMaxAnisotropy();
+  const sky3d = gpu ? gpu.createGpuAtmosphere(atmo) : null;
+  const pipeline = gpu ? gpu.createPipeline(renderer, scene, camera) : null;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.shadowMap.autoUpdate = false;
-  renderer.debug.onShaderError = (gl, program) => fail(`3D 材質編譯失敗：${gl.getProgramInfoLog(program) || '裝置未提供詳細訊息'}`);
+  if (gpu) renderer.onDeviceLost = info => fail(`圖形裝置中斷（${info?.message || '未提供原因'}），請改用輕量版或重新載入。`);
+  else renderer.debug.onShaderError = (gl, program) => fail(`3D 材質編譯失敗：${gl.getProgramInfoLog(program) || '裝置未提供詳細訊息'}`);
   const onContextLost = event => { event.preventDefault(); fail('圖形裝置中斷，請改用輕量版或重新載入。'); };
   canvas.addEventListener('webglcontextlost', onContextLost);
 
@@ -217,9 +227,10 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
   sunlight.shadow.camera.far = 170;
   sunlight.shadow.bias = -0.0004;
   sunlight.shadow.normalBias = 0.045;
+  if (gpu) sunlight.shadow.autoUpdate = false; // WebGPU 渲染器以各光源的 shadow.needsUpdate 控制重畫
   const hemisphere = new THREE.HemisphereLight('#e3eff8', '#414431', 0.3);
   scene.add(sunlight, sunlight.target, hemisphere);
-  const pmrem = new THREE.PMREMGenerator(renderer);
+  const pmrem = gpu ? new gpu.THREE.PMREMGenerator(renderer) : new THREE.PMREMGenerator(renderer);
 
   function resize() {
     if (disposed) return;
@@ -241,7 +252,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
       const texture = await loader.loadAsync(`./assets/pbr/${name}.jpg`);
       texture.colorSpace = name.endsWith('-normal') ? THREE.NoColorSpace : THREE.SRGBColorSpace;
       texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-      texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8);
+      texture.anisotropy = Math.min(maxAnisotropy, 8);
       if (name.startsWith('ground')) texture.repeat.set(26, 26);
       if (name.startsWith('bark')) texture.repeat.set(1.2, 4.2);
       if (name.startsWith('rock')) texture.repeat.set(1.25, 1.25);
@@ -267,7 +278,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
           material.envMapIntensity = 0.95;
           material.onBeforeCompile = shader => addAtmosphere(shader, atmo);
           for (const value of Object.values(material)) if (value?.isTexture) {
-            value.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8); modelTextures.add(value);
+            value.anisotropy = Math.min(maxAnisotropy, 8); modelTextures.add(value);
           }
         }
         meshes.push(object);
@@ -281,7 +292,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
     resizeObserver.disconnect();
     motionPreference.removeEventListener('change', onMotionPreference);
     canvas.removeEventListener('webglcontextlost', onContextLost);
-    pmrem.dispose(); renderer.dispose();
+    sky3d?.dispose(); pipeline?.dispose(); pmrem.dispose(); renderer.dispose();
     onFailure('自然材質載入失敗，請確認網路後重新載入，或改用輕量版。');
     throw error;
   }
@@ -313,18 +324,22 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
     return material;
   }
   const sceneDefine = key => ({ [`SCENE_${key.toUpperCase()}`]: '' });
+  // WebGPU 路徑：同樣的參數建立節點材質，霧由場景的 fogNode 統一處理，不需逐材質修補。
+  const StandardMaterial = gpu ? gpu.MeshStandardNodeMaterial : THREE.MeshStandardMaterial;
   function standard(map, color = '#ffffff', extra = {}) {
-    return patched(new THREE.MeshStandardMaterial({
+    const material = new StandardMaterial({
       color, map: map ? textures.get(map) : null, normalMap: map ? textures.get(`${map}-normal`) : null,
       normalScale: new THREE.Vector2(0.65, 0.65), roughness: 0.95, metalness: 0, envMapIntensity: 0.8, ...extra,
-    }), 'atmosphere', shader => addAtmosphere(shader, atmo));
+    });
+    return gpu ? material : patched(material, 'atmosphere', shader => addAtmosphere(shader, atmo));
   }
   function foliageMaterial(map, options, extra = {}) {
-    const material = new THREE.MeshStandardMaterial({ map, alphaTest: 0.5, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.85, metalness: 0, envMapIntensity: 0.9, ...extra });
+    const material = new StandardMaterial({ map, alphaTest: 0.5, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.85, metalness: 0, envMapIntensity: 0.9, ...extra });
+    if (gpu) return gpu.patchFoliage(material, sky3d, options);
     return patched(material, `foliage:${JSON.stringify(options)}`, shader => patchFoliage(shader, atmo, options));
   }
   function texture(canvasElement) {
-    const result = toTexture(canvasElement, Math.min(renderer.capabilities.getMaxAnisotropy(), 4));
+    const result = toTexture(canvasElement, Math.min(maxAnisotropy, 4));
     transientTextures.push(result);
     return result;
   }
@@ -346,16 +361,25 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
     atmo.cloudCover.value = look.clouds;
     atmo.wind.value = look.wind;
     fog.color.set(look.fog); fog.near = look.fogNear; fog.far = look.fogFar;
+    sky3d?.u.fogRange.value.set(look.fogNear, look.fogFar);
     hemisphere.color.set(look.hemi[0]); hemisphere.groundColor.set(look.hemi[1]); hemisphere.intensity = look.hemi[2];
     renderer.toneMappingExposure = look.exposure;
     scene.environmentIntensity = look.env;
     sunlight.shadow.mapSize.set(tier.shadow, tier.shadow);
     sunlight.shadow.radius = tier.shadowRadius;
-    if (sunlight.shadow.map) { sunlight.shadow.map.dispose(); sunlight.shadow.map = null; }
+    // WebGPU 的陰影節點自己持有陰影圖並依 mapSize 調整尺寸；外部釋放會讓它送出已銷毀的緩衝區。
+    if (!gpu && sunlight.shadow.map) { sunlight.shadow.map.dispose(); sunlight.shadow.map = null; }
   }
 
   /** 天空穹頂，並以同一片天空烘出環境光（PMREM），讓地面、岩石與水面的反光和天色一致。 */
   function sky() {
+    if (gpu) {
+      sky3d.bake(renderer);
+      if (envTarget) envTarget.dispose();
+      envTarget = gpu.installSky(renderer, scene, sky3d, pmrem);
+      scene.environment = envTarget.texture;
+      return;
+    }
     const geometry = new THREE.SphereGeometry(10, 48, 24), material = skyMaterial(atmo);
     const dome = new THREE.Mesh(geometry, material);
     dome.frustumCulled = false; dome.renderOrder = 1;
@@ -404,11 +428,12 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
 
   function groundMaterial(key, detailTexture) {
     const look = LOOKS[key].ground, snow = key === 'snow', sand = key === 'ocean';
-    const material = new THREE.MeshStandardMaterial({
+    const material = new StandardMaterial({
       color: '#ffffff', map: snow ? null : textures.get(sand ? 'sand' : 'ground'), normalMap: textures.get(sand ? 'sand-normal' : 'ground-normal'),
       normalScale: new THREE.Vector2(snow ? 0.25 : 0.7, snow ? 0.25 : 0.7), roughness: snow ? 0.8 : 0.95, metalness: 0, vertexColors: true, envMapIntensity: 1,
       aoMap: detailTexture, aoMapIntensity: 1,
     });
+    if (gpu) return gpu.patchGround(material, look, { map: textures.get('ground'), detail: detailTexture, pathMap: textures.get('sand'), repeat: 26 });
     material.defines = { ...sceneDefine(key), TRAIL_TINT: look.trail, CANOPY_DARK: look.canopy[0], CANOPY_LIGHT: look.canopy[1], CANOPY_AMOUNT: look.canopy[2], ROCK_TINT: look.rock, PEAK_SNOW: look.peak };
     return patched(material, 'ground', shader => patchGround(shader, atmo, textures.get('sand')));
   }
@@ -489,8 +514,8 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
   /** 近景樹：闊葉樹以數個葉團組成不規則樹冠；松樹為層層下垂的枝葉，雪林再覆上積雪。 */
   function forestTrees(key, tier, rand, placements, mark) {
     const pine = key === 'snow', barkColor = pine ? '#8f887a' : '#c2b6a2';
-    const trunkMaterial = patched(standard('bark', barkColor), 'bark', shader => patchBark(shader, atmo));
-    trunkMaterial.defines = sceneDefine(key);
+    const trunkMaterial = gpu ? gpu.patchBark(standard('bark', barkColor)) : patched(standard('bark', barkColor), 'bark', shader => patchBark(shader, atmo));
+    if (!gpu) trunkMaterial.defines = sceneDefine(key);
     const trunkGeometry = new THREE.CylinderGeometry(pine ? 0.18 : 0.46, 1, 1, 14, 12);
     const trunkPositions = trunkGeometry.attributes.position;
     for (let i = 0; i < trunkPositions.count; i++) {
@@ -710,9 +735,10 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
 
   function rocks(key, rand, mark) {
     const count = key === 'ocean' ? 49 : 72;
-    const material = patched(standard('rock', '#ffffff', { envMapIntensity: 1, normalScale: new THREE.Vector2(0.9, 0.9), roughness: key === 'ocean' ? 0.8 : 0.92 }), 'rock', shader => patchRock(shader, atmo));
+    const rockBase = standard('rock', '#ffffff', { envMapIntensity: 1, normalScale: new THREE.Vector2(0.9, 0.9), roughness: key === 'ocean' ? 0.8 : 0.92 });
+    const material = gpu ? gpu.patchRock(rockBase) : patched(rockBase, 'rock', shader => patchRock(shader, atmo));
     material.color.setRGB(1.55, 1.5, 1.42); // 原始 dark_rock 貼圖偏黑，提亮成自然岩色
-    material.defines = sceneDefine(key);
+    if (!gpu) material.defines = sceneDefine(key);
     const shapes = [0, 1, 2].map(() => {
       const mesh = new THREE.InstancedMesh(boulderGeometry(currentQuality === 'high' ? 3 : 2, rand), material, count);
       mesh.castShadow = mesh.receiveShadow = true;
@@ -839,7 +865,8 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setAttribute('depth', new THREE.Float32BufferAttribute(depths, 1));
     geometry.setIndex(indices);
-    world.add(new THREE.Mesh(geometry, creekMaterial(atmo, { shallow: '#5a5634', deep: '#163a33', bank: '#2b3a24' })));
+    const colors = { shallow: '#5a5634', deep: '#163a33', bank: '#2b3a24' };
+    world.add(new THREE.Mesh(geometry, gpu ? gpu.creekMaterial(sky3d, colors) : creekMaterial(atmo, colors)));
   }
 
   /** 大西洋：近岸細密、遠方漸疏的網格一路鋪到地平線。 */
@@ -903,7 +930,8 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
     geometry.setAttribute('base', new THREE.Float32BufferAttribute(bases, 3));
     geometry.setAttribute('shaft', new THREE.Float32BufferAttribute(shafts, 3));
     geometry.setIndex(indices);
-    const mesh = new THREE.Mesh(geometry, shaftMaterial(atmo, displayColor(look.shafts[0], look.shafts[1])));
+    const shaftColor = displayColor(look.shafts[0], look.shafts[1]);
+    const mesh = new THREE.Mesh(geometry, gpu ? gpu.shaftMaterial(sky3d, shaftColor) : shaftMaterial(atmo, shaftColor));
     mesh.frustumCulled = false; mesh.renderOrder = 2;
     world.add(mesh);
   }
@@ -928,6 +956,12 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
       for (let i = 0; i < tier.fallingLeaves; i++) choices[Math.floor(rand() * choices.length)].toArray(colors, i * 3);
       particleField(tier.fallingLeaves, rand, fallingLeafMaterial(atmo, { box: [40, 18, 40], size: 0.16 }), { name: 'leafColor', attribute: new THREE.BufferAttribute(colors, 3) });
     }
+    if (gpu && key === 'forest') {
+      const sprite = gpu.moteSprites(sky3d, { count: tier.motes, rand, color: displayColor(LOOKS.forest.motes, 0.9), box: [34, 9, 34], size: 0.025 });
+      sprite.visible = !reducedMotion;
+      world.add(sprite); particles.push(sprite);
+      return;
+    }
     if (key === 'forest' || key === 'autumn') {
       const look = LOOKS[key];
       particleField(key === 'autumn' ? Math.round(tier.motes * 0.6) : tier.motes, rand, moteMaterial(atmo, { color: displayColor(look.motes, 0.9), box: [34, 9, 34], size: 0.025 }));
@@ -939,6 +973,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
     sunlight.position.copy(sunlight.target.position).addScaledVector(atmo.sunDirection.value, 70);
     sunlight.target.updateMatrixWorld();
     renderer.shadowMap.needsUpdate = true;
+    if (gpu) sunlight.shadow.needsUpdate = true;
   }
 
   function recenter() {
@@ -959,7 +994,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
       scene.remove(world); disposeGroup(world, modelGeometries, modelMaterials);
       transientTextures.forEach(texture => texture.dispose());
       transientTextures = [];
-      renderer.renderLists.dispose();
+      renderer.renderLists?.dispose();
     }
     world = new THREE.Group(); scene.add(world);
     collision = []; particles = [];
@@ -1017,7 +1052,9 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
 
   function draw() {
     if (disposed || failed) return;
-    try { renderer.render(scene, camera); } catch (error) { fail(`3D 畫面無法繼續顯示：${error.message}`); }
+    try {
+      if (pipeline) { renderer.info.reset(); pipeline.render(); } else renderer.render(scene, camera);
+    } catch (error) { fail(`3D 畫面無法繼續顯示：${error.message}`); }
   }
 
   function tick(time) {
@@ -1027,6 +1064,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
     lastTime = time; if (!reducedMotion) clockTime += dt;
     move(dt);
     atmo.time.value = clockTime;
+    sky3d?.frame(clockTime);
     draw();
     statsFrames++;
     if (!statsTime) { statsTime = time; statsFrames = 0; }
@@ -1043,6 +1081,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
     setScene(key) {
       if (disposed) return;
       if (!SCENES.has(key)) throw new RangeError('不支援這個自然場景。');
+      if (gpu && !GPU_SCENES.has(key)) throw new RangeError('WebGPU 試點尚未支援這個自然場景。');
       buildScene(key); lastTime = 0; statsTime = 0; statsFrames = 0;
     },
     setRunning(value) {
@@ -1071,7 +1110,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
       currentQuality = tier; buildScene(currentScene, true); lastTime = 0;
     },
     getState() {
-      return { scene: currentScene, quality: currentQuality, running, ready: !disposed && !failed, reducedMotion, position: { x: camera.position.x, y: camera.position.y, z: camera.position.z }, rotation: { yaw, pitch }, distance, drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
+      return { scene: currentScene, quality: currentQuality, backend, running, ready: !disposed && !failed, reducedMotion, position: { x: camera.position.x, y: camera.position.y, z: camera.position.z }, rotation: { yaw, pitch }, distance, drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
     },
     dispose() {
       if (disposed) return;
@@ -1083,7 +1122,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
       textures.forEach(texture => texture.dispose());
       if (envTarget) envTarget.dispose();
       modelGeometries.forEach(geometry => geometry.dispose()); modelMaterials.forEach(material => material.dispose()); modelTextures.forEach(texture => texture.dispose());
-      sunlight.shadow.dispose(); pmrem.dispose(); renderer.renderLists.dispose(); renderer.dispose();
+      sunlight.shadow.dispose(); sky3d?.dispose(); pipeline?.dispose(); pmrem.dispose(); renderer.renderLists?.dispose(); renderer.dispose();
     },
   };
 }
