@@ -144,6 +144,8 @@ async function leaveWalk() {
   if (document.pointerLockElement) document.exitPointerLock();
   if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch { toast('請使用瀏覽器返回或 Esc 離開全螢幕。'); return; } }
   exploring = false; $('stage').classList.remove('exploring'); $('walk-hint').hidden = $('walking-controls').hidden = $('touch-controls').hidden = $('aim').hidden = true;
+  // 結束漫步一併關閉音景；回到電影館後仍可用下方按鈕重新開啟。
+  if (soundEnabled) { soundEnabled = false; syncSoundUI(); updateAudio(); }
   window.dispatchEvent(new Event('resize')); $('enter').focus();
 }
 $('enter').onclick = enterWalk; $('leave').onclick = leaveWalk;
