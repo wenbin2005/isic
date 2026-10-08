@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1426">
+  <meta name="description" content="星燈港：一款 HD-2D 風格的回合制冒險。找回星之碎片點亮燈塔，再穿過霧之森、登上星之古塔，奪回被熄星者帶走的星之心。">
+  <title>星燈港 · HD-2D 冒險</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+</head>
+<body>
+  <canvas id="game" aria-label="星燈港遊戲畫面"></canvas>
+
+  <div id="loading" class="overlay loading" role="status">
+    <div class="beacon" aria-hidden="true"><i></i></div>
+    <p>正在點亮港口……</p>
+  </div>
+
+  <section id="title" class="overlay title" hidden aria-labelledby="game-title">
+    <div class="title-inner">
+      <p class="eyebrow"><span></span>HD-2D 冒險<span></span></p>
+      <h1 id="game-title">星燈港</h1>
+      <p class="tagline">燈塔熄滅的黃昏，影獸在港口徘徊。<br>找回星光，穿過霧之森，登上星之古塔。</p>
+      <div class="actions">
+        <button id="continue" class="btn primary" hidden>繼續冒險</button>
+        <button id="start" class="btn primary">開始冒險</button>
+        <button id="title-help" class="btn ghost">操作說明</button>
+      </div>
+      <p class="meta">三章劇情 · 回合制戰鬥 · 約 30 分鐘 · 鍵盤、滑鼠或觸控皆可遊玩</p>
+    </div>
+  </section>
+
+  <header id="hud" class="hud" hidden>
+    <div class="hud-left">
+      <div class="objective">
+        <span class="label" id="chapter-label">目前目標</span>
+        <p id="objective-text"></p>
+        <div id="gems" class="gems" role="img" aria-label="星之碎片 0 / 3"><i></i><i></i><i></i></div>
+      </div>
+      <div id="party-hud" class="party-hud" aria-label="隊伍狀態"></div>
+    </div>
+    <button id="menu-btn" class="icon-btn" aria-label="開啟選單">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </header>
+
+  <div id="prompt" class="prompt" hidden><kbd id="prompt-key">空白鍵</kbd><span id="prompt-text">對話</span></div>
+
+  <section id="dialogue" class="dialogue" hidden aria-live="polite">
+    <div id="speaker" class="speaker"></div>
+    <p id="dialogue-text"></p>
+    <span class="next" aria-hidden="true"></span>
+  </section>
+
+  <div id="touch" class="touch" hidden>
+    <div id="stick-zone" class="stick-zone" aria-label="移動搖桿：在左半邊按住並拖曳"></div>
+    <div id="stick" class="stick" aria-hidden="true"><i></i></div>
+    <button id="act-btn" class="act-btn">調查</button>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <dialog id="menu" class="panel" aria-labelledby="menu-title">
+    <h2 id="menu-title">暫停</h2>
+    <div id="menu-party" class="menu-party"></div>
+    <div class="panel-actions">
+      <button id="resume" class="btn primary">繼續遊戲</button>
+      <button id="menu-help" class="btn ghost">操作說明</button>
+      <label class="field"><span>畫質</span>
+        <select id="quality-select">
+          <option value="high">精緻（景深、光暈、陰影）</option>
+          <option value="balanced">流暢（適合較舊的裝置）</option>
+        </select>
+      </label>
+      <label class="field"><span>聲音</span>
+        <select id="sound-select">
+          <option value="all">音樂與音效</option>
+          <option value="sfx">只有音效</option>
+          <option value="off">關閉</option>
+        </select>
+      </label>
+      <button id="restart" class="btn ghost">回到標題畫面</button>
+    </div>
+  </dialog>
+
+  <dialog id="help" class="panel" aria-labelledby="help-title">
+    <h2 id="help-title">操作說明</h2>
+    <dl class="keys">
+      <dt>移動</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 或方向鍵；手機在畫面左半邊按住拖曳</dd>
+      <dt>對話、調查</dt><dd><kbd>空白鍵</kbd> <kbd>Enter</kbd> <kbd>E</kbd>；手機點右下「調查」</dd>
+      <dt>下一句</dt><dd>同上，或直接點對話框</dd>
+      <dt>暫停</dt><dd><kbd>Esc</kbd> 或右上角選單</dd>
+      <dt>戰鬥</dt><dd><kbd>↑</kbd><kbd>↓</kbd> 選擇、<kbd>←</kbd><kbd>→</kbd> 蓄力、<kbd>空白鍵</kbd> 決定、<kbd>Esc</kbd> 返回；手機直接點選，選單左上的「返回」回上一層</dd>
+    </dl>
+    <p class="note">碰到地圖上的影獸就會進入戰鬥。打中弱點會削減護盾，護盾歸零即「破防」：敵人暫停行動，受到的傷害提高。每回合累積 BP，投入 BP 可以連擊或強化技能。進度會在戰鬥勝利與休息時自動保存。音樂與音效可以在選單裡調整或關閉。</p>
+    <button class="btn primary" data-close>知道了</button>
+  </dialog>
+
+  <section id="ending" class="overlay ending" hidden aria-labelledby="end-title">
+    <div class="ending-inner">
+      <p class="eyebrow"><span></span>終章<span></span></p>
+      <h2 id="end-title">星燈，再次亮起</h2>
+      <p>星之心回到了燈芯。<br>從今以後，星燈港的夜晚不再黑暗。</p>
+      <p class="time">遊玩時間　<strong id="end-time"></strong>　·　隊伍等級　<strong id="end-level"></strong></p>
+      <div class="actions">
+        <button id="end-continue" class="btn primary">繼續漫步</button>
+        <button id="end-restart" class="btn ghost">重新開始</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="battle" class="battle" hidden aria-label="戰鬥"></section>
+
+  <section id="chapter" class="overlay chapter" hidden aria-live="polite">
+    <div><p class="eyebrow"><span></span><em id="chapter-no"></em><span></span></p><h2 id="chapter-title"></h2><p id="chapter-sub"></p></div>
+  </section>
+
+  <div id="wipe" class="wipe" aria-hidden="true"></div>
+
+  <div id="error" class="overlay error" hidden>
+    <div><h2>無法啟動 3D 畫面</h2><p>這台裝置或瀏覽器目前無法使用 WebGL。請改用新版 Chrome、Edge、Safari 或 Firefox，並確認已開啟硬體加速。</p></div>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
