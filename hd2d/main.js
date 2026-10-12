@@ -441,8 +441,8 @@ let chapterTimer;
 async function chapterCard(n) {
   const c = CHAPTERS[n];
   $('chapter-no').textContent = c.no; $('chapter-title').textContent = c.title; $('chapter-sub').textContent = c.sub;
-  ui.chapter.hidden = false; ui.chapter.style.animation = 'none'; void ui.chapter.offsetWidth; ui.chapter.style.animation = '';
-  clearTimeout(chapterTimer); chapterTimer = setTimeout(() => { ui.chapter.hidden = true; }, 3400);
+  ui.chapter.hidden = false; ui.chapter.style.setProperty('animation', 'none', 'important'); void ui.chapter.offsetWidth; ui.chapter.style.animation = ''; // 減少動態的樣式帶 !important，重播也要用 important 才蓋得過
+  clearTimeout(chapterTimer); chapterTimer = setTimeout(() => { ui.chapter.hidden = true; }, reduceMotion ? 1600 : 3400); // 與 style.css 的章節卡動畫時長一致
   audio.sfx('chapter');
   game.mode = 'cutscene';
   await wait(reduceMotion ? 1200 : 3000);

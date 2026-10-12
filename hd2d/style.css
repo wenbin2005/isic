@@ -345,4 +345,8 @@ dialog.panel h2 { font-family: var(--serif); letter-spacing: 0.3em; text-align: 
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  /* 章節卡與戰鬥數字是資訊，不能跟著瞬間跑完而停在透明：改成不位移的淡入、停留、淡出，由這裡的時長決定看得到多久 */
+  .chapter { animation: rm-show 1.6s linear both !important; }
+  .b-pop { animation: rm-show 1.25s linear forwards !important; }
 }
+@keyframes rm-show { 0% { opacity: 0; } 10% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }

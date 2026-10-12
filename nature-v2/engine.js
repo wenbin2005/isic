@@ -1090,7 +1090,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
     },
     setRunning(value) {
       if (disposed || failed) return;
-      running = Boolean(value); lastTime = 0;
+      running = Boolean(value); lastTime = 0; statsTime = 0; statsFrames = 0; // 暫停的空檔不算進幀率
       if (running && frame === null) frame = requestAnimationFrame(tick);
       if (!running && frame !== null) { cancelAnimationFrame(frame); frame = null; }
       if (!running) { Object.keys(input).forEach(key => { input[key] = false; }); draw(); }

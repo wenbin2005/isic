@@ -24,6 +24,7 @@ let quality = 'high', switching = false, starting = false, retryRequested = fals
 let lastStats = null, lastSceneChange = 0, toastTimer, gesture = null, pointerLocked = false;
 let soundEnabled = false, audio = null, soundBusy = false, birdTime = 0, audioInterval = 0;
 let breathStarted = 0, breathFrame = 0;
+let stageInView = true, renderActive = null;
 const input = { forward:false, backward:false, left:false, right:false };
 const gate = createPerformanceGate(quality, forced3D);
 const keyMap = { KeyW:'forward', ArrowUp:'forward', KeyS:'backward', ArrowDown:'backward', KeyA:'left', ArrowLeft:'left', KeyD:'right', ArrowRight:'right' };
@@ -38,8 +39,15 @@ function updateSceneUI() {
   document.querySelectorAll('[data-scene]').forEach(button => { const selected = button.dataset.scene === current; button.classList.toggle('selected', selected); button.setAttribute('aria-pressed', String(selected)); });
   updateAudio();
 }
+/** 實際是否要渲染：使用者沒按暫停、分頁可見、舞台在畫面內、沒有開著對話框。看不到的畫面不畫，也不算進自動降級的幀率。 */
+function updateRendering() {
+  const active = running && !document.hidden && stageInView && !document.querySelector('dialog[open]');
+  // 從暫停恢復時重新暖機，避免把暫停前後的空檔算成低幀率
+  if (active && renderActive === false) gate.reset(performance.now(), quality);
+  renderActive = active; explorer?.setRunning(active);
+}
 function updateRunning() {
-  explorer?.setRunning(running && !document.hidden);
+  updateRendering();
   $('walk-play').textContent = running ? 'Ⅱ 暫停' : '▶ 繼續';
   $('walk-play').setAttribute('aria-label', running ? '暫停漫步' : '繼續漫步');
   $('status').textContent = running ? `${scenes[current].label} · 慢慢看，慢慢走` : '已暫停，風景會在這裡等你';
@@ -218,9 +226,12 @@ async function toggleSound() {
 }
 $('sound').onclick = $('walk-sound').onclick = toggleSound;
 
-function openDialog(id) { resetInput(); $(id).showModal(); }
+function openDialog(id) { resetInput(); $(id).showModal(); updateRendering(); }
 $('guide-open').onclick = $('guide-inline').onclick = () => openDialog('guide-dialog'); $('source-open').onclick = () => openDialog('source-dialog'); $('breath-open').onclick = () => openDialog('breath-dialog');
 document.querySelectorAll('.close-dialog').forEach(button => button.onclick = () => button.closest('dialog').close());
+document.querySelectorAll('dialog').forEach(dialog => dialog.addEventListener('close', updateRendering));
+// 舞台大半捲出畫面時暫停 3D（露出的一小條停在最後一幀），捲回來再繼續；漫步模式的舞台是 fixed 全畫面，一律算在畫面內。
+if ('IntersectionObserver' in window) new IntersectionObserver(([entry]) => { stageInView = entry.isIntersecting && entry.intersectionRatio >= .35; updateRendering(); }, { threshold:[0, .35] }).observe($('stage'));
 document.querySelectorAll('dialog').forEach(dialog => dialog.addEventListener('click', event => { const rect = dialog.getBoundingClientRect(); if (event.target === dialog && (event.clientX<rect.left || event.clientX>rect.right || event.clientY<rect.top || event.clientY>rect.bottom)) dialog.close(); }));
 function stopBreath() { cancelAnimationFrame(breathFrame); breathStarted = 0; document.querySelector('.breath-visual').classList.remove('running'); $('breath-start').textContent = '開始呼吸練習'; $('breath-phase').textContent = '準備好了嗎？'; $('breath-count').textContent = '依照舒服的節奏就好'; }
 function breathe(now) { if (!breathStarted) breathStarted = now; const phase = (now-breathStarted)/1000%10; $('breath-phase').textContent = phase<4?'慢慢吸氣':'緩緩吐氣'; $('breath-count').textContent = `${Math.ceil(phase<4?4-phase:10-phase)} 秒`; breathFrame = requestAnimationFrame(breathe); }
