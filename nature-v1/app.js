@@ -40,13 +40,13 @@
   function switchScene(key) {
     if (!scenes[key]) return;
     current = key; elapsed = 0; panX = panY = 0;
-    const scene = scenes[key], src = `./assets/${key}.png`;
+    const scene = scenes[key], src = `./assets/${key}.webp`;
     $('scene-image').src = src; $('scene-image').alt = scene.alt;
     $('scene-image').classList.remove('changed'); void $('scene-image').offsetWidth; $('scene-image').classList.add('changed');
     $('scene-tag').textContent = $('mini-title').textContent = scene.label;
     $('scene-title').textContent = scene.title; $('scene-description').textContent = scene.description;
     $('scene-number').textContent = `0${keys.indexOf(key) + 1} / 04`;
-    $('mini-image').src = src;
+    $('mini-image').src = `./assets/${key}-640.webp`;
     document.querySelectorAll('.scene-card').forEach(card => {
       const active = card.dataset.scene === key;
       card.classList.toggle('active', active); card.setAttribute('aria-pressed', String(active));

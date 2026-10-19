@@ -249,7 +249,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
   const loader = new THREE.TextureLoader();
   try {
     await Promise.all(['ground', 'bark', 'rock', 'sand'].flatMap(name => [name, `${name}-normal`]).map(async name => {
-      const texture = await loader.loadAsync(`./assets/pbr/${name}.jpg`);
+      const texture = await loader.loadAsync(`./assets/pbr/${name}.webp`);
       texture.colorSpace = name.endsWith('-normal') ? THREE.NoColorSpace : THREE.SRGBColorSpace;
       texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
       texture.anisotropy = Math.min(maxAnisotropy, 8);
