@@ -1,6 +1,6 @@
 # isic
 
-Browser-based 3D/WebGL experiments built with three.js, all playable online with no install:
+Browser-based 3D/WebGL experiments, all playable online with no install:
 
 - **nature-v1** – the original static version of "Infinite Cinema". [Play](https://wenbin2005.github.io/isic/nature-v1/)
 - **nature-v2** – a walkable 3D nature scene, with optimization and visual polish notes. [Play](https://wenbin2005.github.io/isic/nature-v2/)
