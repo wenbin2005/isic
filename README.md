@@ -3,3 +3,16 @@
 - `nature-v1/`：無限電影館靜態版（原版）
 - `nature-v2/`：自然漫遊可行走 3D 版（含 2026-10-02 優化與場景美化，見 `nature-v2/優化紀錄_20261002.md`、`nature-v2/美化紀錄_20261002.md`）
 - `hd2d/`：星燈港，HD-2D 風格的回合制冒險，三章劇情加兩場頭目戰（見 `hd2d/使用說明.md`）
+
+## 素材來源與授權
+
+程式碼以 [MIT](LICENSE) 授權。下列第三方素材不屬於 MIT 範圍，依各自授權使用：
+
+| 素材 | 位置 | 來源 | 授權 |
+|---|---|---|---|
+| 岩石模型 `rock_moss_set_01`、樹樁模型 `tree_stump_01` | `nature-v2/assets/models/` | [Poly Haven](https://polyhaven.com/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| PBR 貼圖：`bark_brown_01`、`forest_ground_04`、`dark_rock`、`coast_sand_01`，以及 `tree_small_02` 的葉片、`pine_tree_01` 的枝條 | `nature-v2/assets/pbr/` | [Poly Haven](https://polyhaven.com/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| 天空 HDRI `autumn_field_puresky` | `nature-v2/assets/pbr/sky.hdr` | [Poly Haven](https://polyhaven.com/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| three.js | `hd2d/vendor/`、`nature-v2/vendor/` | [three.js](https://github.com/mrdoob/three.js) | MIT（見各資料夾的 `THREE-LICENSE.txt`） |
+
+每個素材旁的 `來源清單.json`／`*.source.json` 記錄原始下載網址與 SHA-256，可用來核對檔案未被更動。
