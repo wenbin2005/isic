@@ -13,6 +13,7 @@
 | 岩石模型 `rock_moss_set_01`、樹樁模型 `tree_stump_01` | `nature-v2/assets/models/` | [Poly Haven](https://polyhaven.com/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | PBR 貼圖：`bark_brown_01`、`forest_ground_04`、`dark_rock`、`coast_sand_01`，以及 `tree_small_02` 的葉片、`pine_tree_01` 的枝條 | `nature-v2/assets/pbr/` | [Poly Haven](https://polyhaven.com/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | 天空 HDRI `autumn_field_puresky` | `nature-v2/assets/pbr/sky.hdr` | [Poly Haven](https://polyhaven.com/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| 四季主題圖 `autumn`、`forest`、`ocean`、`snow` | `nature-v1/assets/`、`nature-v2/assets/thumbs/`、`nature-v2/classic/assets/` | 本專案作者以 AI 工具生成 | 隨本 repo 以 MIT 提供（AI 生成內容的著作權狀態依各地法律而定） |
 | three.js | `hd2d/vendor/`、`nature-v2/vendor/` | [three.js](https://github.com/mrdoob/three.js) | MIT（見各資料夾的 `THREE-LICENSE.txt`） |
 
 每個素材旁的 `來源清單.json`／`*.source.json` 記錄原始下載網址與 SHA-256，可用來核對檔案未被更動。
