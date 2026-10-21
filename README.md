@@ -1,5 +1,11 @@
 # isic
 
+Browser-based 3D/WebGL experiments built with three.js, all playable online with no install:
+
+- **nature-v1** – the original static version of "Infinite Cinema". [Play](https://wenbin2005.github.io/isic/nature-v1/)
+- **nature-v2** – a walkable 3D nature scene, with optimization and visual polish notes. [Play](https://wenbin2005.github.io/isic/nature-v2/)
+- **hd2d** – "Starlight Harbor", an HD-2D style turn-based adventure with three chapters and two boss fights. [Play](https://wenbin2005.github.io/isic/hd2d/)
+
 - `nature-v1/`：無限電影館靜態版（原版）
 - `nature-v2/`：自然漫遊可行走 3D 版（含 2026-10-02 優化與場景美化，見 `nature-v2/優化紀錄_20261002.md`、`nature-v2/美化紀錄_20261002.md`）
 - `hd2d/`：星燈港，HD-2D 風格的回合制冒險，三章劇情加兩場頭目戰（見 `hd2d/使用說明.md`）
