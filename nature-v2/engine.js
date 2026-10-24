@@ -214,9 +214,9 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.shadowMap.autoUpdate = false;
-  if (gpu) renderer.onDeviceLost = info => fail(`圖形裝置中斷（${info?.message || '未提供原因'}），請改用輕量版或重新載入。`);
+  if (gpu) renderer.onDeviceLost = info => fail(`圖形裝置中斷（${info?.message || '未提供原因'}），請改用靜態版或重新載入。`);
   else renderer.debug.onShaderError = (gl, program) => fail(`3D 材質編譯失敗：${gl.getProgramInfoLog(program) || '裝置未提供詳細訊息'}`);
-  const onContextLost = event => { event.preventDefault(); fail('圖形裝置中斷，請改用輕量版或重新載入。'); };
+  const onContextLost = event => { event.preventDefault(); fail('圖形裝置中斷，請改用靜態版或重新載入。'); };
   canvas.addEventListener('webglcontextlost', onContextLost);
 
   const sunlight = new THREE.DirectionalLight('#fff0d6', 3.2);
@@ -293,7 +293,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
     motionPreference.removeEventListener('change', onMotionPreference);
     canvas.removeEventListener('webglcontextlost', onContextLost);
     sky3d?.dispose(); pipeline?.dispose(); pmrem.dispose(); renderer.dispose();
-    onFailure('自然材質載入失敗，請確認網路後重新載入，或改用輕量版。');
+    onFailure('自然材質載入失敗，請確認網路後重新載入，或改用靜態版。');
     throw error;
   }
 
@@ -1073,7 +1073,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
     statsFrames++;
     if (!statsTime) { statsTime = time; statsFrames = 0; }
     if (time - statsTime >= 1000) {
-      onStats({ fps: statsFrames * 1000 / (time - statsTime), position: { x: camera.position.x, y: camera.position.y, z: camera.position.z }, distance, drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles, scene: currentScene, quality: currentQuality });
+      onStats({ fps: statsFrames * 1000 / (time - statsTime), position: { x: camera.position.x, y: camera.position.y, z: camera.position.z }, distance, drawCalls: gpu ? renderer.info.render.drawCalls : renderer.info.render.calls, triangles: renderer.info.render.triangles, scene: currentScene, quality: currentQuality });
       statsTime = time; statsFrames = 0;
     }
     if (!failed) frame = requestAnimationFrame(tick);
@@ -1114,7 +1114,7 @@ export async function createExplorer({ canvas, scene: initialScene = 'forest', q
       currentQuality = tier; buildScene(currentScene, true); lastTime = 0;
     },
     getState() {
-      return { scene: currentScene, quality: currentQuality, backend, running, ready: !disposed && !failed, reducedMotion, position: { x: camera.position.x, y: camera.position.y, z: camera.position.z }, rotation: { yaw, pitch }, distance, drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
+      return { scene: currentScene, quality: currentQuality, backend, running, ready: !disposed && !failed, reducedMotion, position: { x: camera.position.x, y: camera.position.y, z: camera.position.z }, rotation: { yaw, pitch }, distance, drawCalls: gpu ? renderer.info.render.drawCalls : renderer.info.render.calls, triangles: renderer.info.render.triangles };
     },
     dispose() {
       if (disposed) return;
