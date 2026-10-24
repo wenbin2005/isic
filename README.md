@@ -6,9 +6,13 @@ Browser-based 3D/WebGL experiments, all playable online with no install:
 - **nature-v2** – a walkable 3D nature scene, with optimization and visual polish notes. [Play](https://wenbin2005.github.io/isic/nature-v2/)
 - **hd2d** – "Starlight Harbor", an HD-2D style turn-based adventure with three chapters and two boss fights. [Play](https://wenbin2005.github.io/isic/hd2d/)
 
-- `nature-v1/`：無限電影館靜態版（原版）
-- `nature-v2/`：自然漫遊可行走 3D 版（含 2026-10-02 優化與場景美化，見 `nature-v2/優化紀錄_20261002.md`、`nature-v2/美化紀錄_20261002.md`）
+網頁互動作品集，線上遊玩：https://wenbin2005.github.io/isic/
+
 - `hd2d/`：星燈港，HD-2D 風格的回合制冒險，三章劇情加兩場頭目戰（見 `hd2d/使用說明.md`）
+- `nature-v2/`：無限電影館·自然漫遊，可行走 3D 版（含 2026-10-02 優化與場景美化，見 `nature-v2/優化紀錄_20261002.md`、`nature-v2/美化紀錄_20261002.md`）
+- `nature-v1/`：無限電影館靜態版（原版）
+
+根目錄 `index.html` 是作品集首頁；`assets/` 放首頁卡片與社群分享預覽圖。
 
 ## 素材來源與授權
 
