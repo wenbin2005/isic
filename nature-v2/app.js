@@ -83,7 +83,9 @@ async function useClassic(reason, remember = true) {
   if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch { /* 全螢幕退出失敗仍保留返回入口。 */ } }
   if (document.pointerLockElement) document.exitPointerLock();
   exploring = false; $('stage').classList.remove('exploring');
-  explorer?.dispose(); explorer = null; stopAudio();
+  $('walk-hint').hidden = $('walking-controls').hidden = $('touch-controls').hidden = $('aim').hidden = true;
+  // 失去 context 的畫布不能再建立渲染器：退回時就換新畫布，之後按「試試 3D」才救得回來。
+  explorer?.dispose(); explorer = null; freshCanvas(); stopAudio();
   $('three-content').hidden = true; $('classic-content').hidden = false; $('fallback-reason').textContent = reason;
   $('classic-frame').src = './classic/index.html';
   $('try-three').focus();
@@ -99,12 +101,17 @@ async function start3D() {
     if (!context) throw new Error('這個瀏覽器未提供 WebGL2，已為你使用原版靜態體驗。');
     context.getExtension('WEBGL_lose_context')?.loseContext();
     const { createExplorer, GPU_SCENES } = await import('./engine.js');
-    const onFailure = message => { if (activeMode === '3d' || activeMode === 'loading') useClassic(`3D 場景暫時無法繼續：${message}。已保留原版靜態體驗。`, false); };
+    const onFailure = message => { if (activeMode === '3d' || activeMode === 'loading') useClassic(`3D 場景暫時無法繼續：${message.replace(/。$/, '')}。已保留原版靜態體驗。`, false); };
     let created = null;
     if (GPU_SCENES.has(current) && await hasWebGPU()) {
-      // WebGPU 啟動失敗不算 3D 失敗：換一張新畫布改走 WebGL，不打擾使用者。
-      try { created = await createExplorer({ canvas:$('world'), scene:current, quality, gpu:await import('./gpu.js'), onStats:statsUpdate, onFailure }); explorerGpu = true; }
-      catch (error) { console.warn('WebGPU 管線無法啟動，改用 WebGL：', error); gpuAdapter = false; freshCanvas(); }
+      // WebGPU 啟動失敗不算 3D 失敗：換一張新畫布改走 WebGL，不打擾使用者。建立期間引擎回報的失敗先不降級，建好之後才照常處理。
+      let creating = true;
+      try {
+        created = await createExplorer({ canvas:$('world'), scene:current, quality, gpu:await import('./gpu.js'), onStats:statsUpdate, onFailure:message => { if (!creating) onFailure(message); } });
+        if (!created.getState().ready) throw new Error('WebGPU 場景尚未就緒');
+        explorerGpu = true;
+      } catch (error) { console.warn('WebGPU 管線無法啟動，改用 WebGL：', error); created?.dispose(); created = null; gpuAdapter = false; freshCanvas(); }
+      finally { creating = false; }
     }
     if (!created) { created = await createExplorer({ canvas:$('world'), scene:current, quality, onStats:statsUpdate, onFailure }); explorerGpu = false; }
     if (activeMode === 'classic') { created.dispose(); return; }
@@ -158,7 +165,11 @@ async function leaveWalk() {
 }
 $('enter').onclick = enterWalk; $('leave').onclick = leaveWalk;
 $('expand').onclick = async () => { enterWalk(); try { if ($('stage').requestFullscreen) await $('stage').requestFullscreen(); else toast('已開啟沉浸漫步'); } catch { toast('已使用沉浸模式，瀏覽器未允許全螢幕。'); } };
-document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && exploring) leaveWalk(); });
+document.addEventListener('fullscreenchange', () => {
+  // 全螢幕只顯示舞台子樹：提示框跟著搬進全螢幕元素，離開時搬回 body。
+  const host = document.fullscreenElement || document.body; if ($('toast').parentElement !== host) host.append($('toast'));
+  if (!document.fullscreenElement && exploring) leaveWalk();
+});
 $('choose-static').onclick = () => useClassic('已依你的選擇，使用完整保留的原版靜態體驗。');
 $('try-three').onclick = () => { saveMode('3d'); quality = 'balanced'; start3D(); };
 $('walk-play').onclick = () => { running = !running; updateRunning(); };
@@ -167,7 +178,7 @@ $('quality').onchange = () => setQuality($('quality').value);
 document.querySelectorAll('[data-scene]').forEach(button => button.onclick = () => switchScene(button.dataset.scene));
 
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && exploring && !document.fullscreenElement) leaveWalk();
+  if (event.key === 'Escape' && exploring && !document.fullscreenElement && !document.querySelector('dialog[open]')) leaveWalk();
   if (!exploring || document.querySelector('dialog[open]') || event.target.closest('select,input')) return;
   // 按過控制列按鈕後焦點留在按鈕上：移動鍵仍要能走路，空白鍵則交還給按鈕本身。
   if (event.target.closest('button') && !keyMap[event.code]) return;
@@ -237,7 +248,7 @@ function stopBreath() { cancelAnimationFrame(breathFrame); breathStarted = 0; do
 function breathe(now) { if (!breathStarted) breathStarted = now; const phase = (now-breathStarted)/1000%10; $('breath-phase').textContent = phase<4?'慢慢吸氣':'緩緩吐氣'; $('breath-count').textContent = `${Math.ceil(phase<4?4-phase:10-phase)} 秒`; breathFrame = requestAnimationFrame(breathe); }
 $('breath-start').onclick = () => { if (document.querySelector('.breath-visual').classList.contains('running')) stopBreath(); else { document.querySelector('.breath-visual').classList.add('running'); $('breath-start').textContent = '結束練習'; breathFrame = requestAnimationFrame(breathe); } }; $('breath-dialog').addEventListener('close',stopBreath);
 window.addEventListener('pagehide', () => { resetInput(); explorer?.dispose(); clearInterval(audioInterval); audio?.context.close().catch(()=>{}); stopBreath(); });
-window.addEventListener('pageshow', event => { if (event.persisted) { explorer = null; audio = null; soundEnabled = false; audioInterval = 0; syncSoundUI(); if (activeMode === 'classic') $('classic-frame').src = './classic/index.html'; else start3D(); } });
+window.addEventListener('pageshow', event => { if (event.persisted) { explorer = null; audio = null; soundEnabled = false; audioInterval = 0; syncSoundUI(); if (activeMode === 'classic') $('classic-frame').src = './classic/index.html'; else { freshCanvas(); start3D(); } } });
 
 /* 唯讀觀測，供獨立驗收確認真正相機位移與實際渲染。 */
 window.__natureV2 = Object.freeze({ getState:() => ({ activeMode, scene:current, quality, running, exploring, reason:fallbackReason, stats:lastStats, engine:explorer?.getState() || null }) });
