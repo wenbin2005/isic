@@ -16,6 +16,8 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); color: var(--cream); font-family: var(--sans); -webkit-tap-highlight-color: transparent; }
 canvas#game { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; touch-action: none; }
 [hidden] { display: none !important; }
+/* 只給螢幕閱讀器念的文字（對話整句），畫面上不顯示 */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 button { font: inherit; color: inherit; }
 kbd { font-family: var(--sans); font-size: 0.78em; padding: 0.1em 0.5em; border: 1px solid var(--gold-soft); border-bottom-width: 2px; border-radius: 4px; background: rgba(15, 20, 38, 0.8); color: var(--cream); white-space: nowrap; }
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
