@@ -203,12 +203,13 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
 
   // ---------- 單位 ----------
   const charTex = {};
+  // 腳下的圓形影子所有單位共用，只建一次；每場重建又不釋放，GPU 緩衝會每場多 4 個
+  const blobGeo = new THREE.CircleGeometry(0.42, 16).rotateX(-Math.PI / 2);
+  const blobMat = new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.35, depthWrite: false });
   function buildUnits() {
     for (const v of vis.values()) { scene.remove(v.mesh, v.blob); v.mesh.geometry.dispose(); if (v.own) v.mat.dispose(); }
     vis = new Map();
     el.tags.innerHTML = '';
-    const blobGeo = new THREE.CircleGeometry(0.42, 16).rotateX(-Math.PI / 2);
-    const blobMat = new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.35, depthWrite: false });
     b.party.forEach((u, i) => {
       const t = (charTex[u.id] ??= makeCharacterTexture(PALETTES[MEMBERS[u.id].palette]));
       setFrame(t, 3, 0);
@@ -664,7 +665,7 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
     layoutK = innerWidth / innerHeight < 0.9 ? 0.72 : 1; // 直向畫面把兩隊靠近一點，角色才不會太小
     resize();
     view.active = true; root.hidden = false; time = 0;
-    let result;
+    let result, retreated = false;
     for (;;) {
       result = await fight(intro || (enc.escape === false ? '影獸擋住了去路！' : '遭遇敵人！'));
       if (result !== 'lose') break;
@@ -675,11 +676,12 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
         buttons: enc.escape === false ? [{ label: '再試一次', value: 'retry' }] : [{ label: '再試一次', value: 'retry' }, { label: '撤退', value: 'retreat' }]
       });
       fullRestore();
-      if (choice === 'retreat') { result = 'escape'; break; }
+      if (choice === 'retreat') { result = 'escape'; retreated = true; break; }
       intro = '再次挑戰！';
     }
-    // 把戰鬥中的血量寫回隊伍；倒下的同伴在戰鬥後以 1 HP 起身
-    if (result !== 'lose') for (const u of b.party) { u.rec.hp = Math.max(1, u.hp); u.rec.sp = u.sp; }
+    // 把戰鬥中的血量寫回隊伍；倒下的同伴在戰鬥後以 1 HP 起身。
+    // 全滅後撤退時 fullRestore 已經補滿，不能再用戰敗時的血量蓋掉。
+    if (!retreated) for (const u of b.party) { u.rec.hp = Math.max(1, u.hp); u.rec.sp = u.sp; }
     let summary = null;
     if (result === 'win') {
       for (const u of b.party) if (u.hp > 0) tween(0.4, k => { vis.get(u).mesh.position.y = Math.sin(k * Math.PI) * 0.35; });
