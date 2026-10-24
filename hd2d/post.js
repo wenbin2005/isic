@@ -36,6 +36,7 @@ void main(){
   gl_FragColor = vec4(s, 1.0);
 }`;
 
+// 暗角：中心半徑 0.3 以內全亮、0.95 以外最暗。GLSL 的 smoothstep 要求 edge0 < edge1（反過來寫是規格未定義），所以寫成 1 減去正向的 smoothstep
 const COMPOSITE = `
 uniform sampler2D tDiffuse; uniform sampler2D tBloomA; uniform sampler2D tBloomB;
 uniform float bloom; uniform float exposure; uniform float aspect; uniform float time; uniform vec2 res; uniform float fade;
@@ -51,7 +52,7 @@ void main(){
   col = mix(col, col * vec3(0.9, 0.96, 1.1), (1.0 - lum) * 0.4);
   col = mix(col, col * vec3(1.07, 1.0, 0.88), lum * 0.35);
   vec2 p = vUv - 0.5; p.x *= aspect;
-  col *= mix(0.5, 1.0, smoothstep(0.95, 0.3, length(p)));
+  col *= mix(0.5, 1.0, 1.0 - smoothstep(0.3, 0.95, length(p)));
   col = clamp(col, 0.0, 1.0);
   col = toSRGB(col) + (hash(vUv * res + fract(time)) - 0.5) * 0.025;
   gl_FragColor = vec4(col * fade, 1.0);

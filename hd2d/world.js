@@ -534,7 +534,8 @@ export function createWorld(quality) {
       vec4 mv = modelViewMatrix * vec4(p,1.0); gl_Position = projectionMatrix * mv;
       vA = 0.35 + 0.65 * pow(0.5 + 0.5 * sin(time * 2.1 + seed * 3.0), 3.0);
       gl_PointSize = scale * 90.0 / -mv.z; }`,
-    fragmentShader: `uniform float boost; varying float vA; void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.0, d);
+    // 光點中心最亮、半徑 0.5 處淡出；GLSL 的 smoothstep 要求 edge0 < edge1，所以寫成 1 減去正向的 smoothstep
+    fragmentShader: `uniform float boost; varying float vA; void main(){ float d = length(gl_PointCoord - 0.5); float a = 1.0 - smoothstep(0.0, 0.5, d);
       gl_FragColor = vec4(vec3(2.2, 2.6, 1.0) * a * vA * boost, 1.0); }`,
     transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
   });
