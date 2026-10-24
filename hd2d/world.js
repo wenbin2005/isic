@@ -562,7 +562,7 @@ export function createWorld(quality) {
     hemi.intensity = a.hemi; sun.intensity = a.sun; sun.color.set(a.sunColor);
   }
 
-  let time = 0;
+  let time = 0, flyTime = 0, reduceMotion = false;
   return {
     scene, sun, hemi, lighthouse, flies, spriteGeo, isBlocked, groundAt, tiles: T,
     setGate, setMist, setTower,
@@ -574,15 +574,20 @@ export function createWorld(quality) {
       flyMat.uniforms.boost.value = q === 'high' ? 1 : 0.8;
     },
     setPixelScale(s) { flyMat.uniforms.scale.value = s; },
+    // 減少動態：燈火不閃、螢火蟲停在原地不飄也不閃
+    setReduceMotion(v) { reduceMotion = v; },
+    // 自動化測試用：第一盞燈目前的亮度倍率、第一團火焰的高度、螢火蟲的動畫時間
+    motionInfo: () => ({ lantern: +(lanterns[0].light.intensity / (lanterns[0].base ?? lanterns[0].light.intensity)).toFixed(3), flame: +lanterns.find(l => l.fire).fire.scale.y.toFixed(3), fly: +flyTime.toFixed(3) }),
     update(dt, focus) {
       time += dt;
       waterTex.offset.set(time * 0.012, Math.sin(time * 0.3) * 0.01);
       for (const l of lanterns) {
-        const k = 0.88 + 0.12 * Math.sin(time * 9 + l.seed) * Math.sin(time * 5.3 + l.seed * 2);
+        const k = reduceMotion ? 1 : 0.88 + 0.12 * Math.sin(time * 9 + l.seed) * Math.sin(time * 5.3 + l.seed * 2);
         l.light.intensity = (l.base ??= l.light.intensity) * k;
-        if (l.fire) l.fire.scale.y = 0.75 + 0.5 * k * (0.8 + 0.2 * Math.sin(time * 13 + l.seed));
+        if (l.fire) l.fire.scale.y = reduceMotion ? 1.15 : 0.75 + 0.5 * k * (0.8 + 0.2 * Math.sin(time * 13 + l.seed));
       }
-      flyMat.uniforms.time.value = time;
+      if (!reduceMotion) flyTime += dt;
+      flyMat.uniforms.time.value = flyTime;
       lighthouse.update(dt);
       mistK += Math.sign(mistTarget - mistK) * Math.min(Math.abs(mistTarget - mistK), dt * 0.4);
       mistMats.forEach((m, k) => { m.map.offset.x = time * (0.015 + k * 0.008) + k * 0.37; m.opacity = (1 - mistK) * 0.9; });

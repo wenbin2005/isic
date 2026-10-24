@@ -891,6 +891,251 @@ async function main() {
     return { normal, reduced };
   });
 
+  // ---------- 第二批修正（P6～P12，低嚴重度） ----------
+  await check('回歸：休息只讓同一區被打倒的遊蕩影獸重新出現（水井只重生鎮上的、營火只重生霧之森的）', async () => {
+    const { page, context, errors } = await open({ storage: { 'hd2d-save': LATE({ pos: [19.0, 16.5] }), 'hd2d-quality': 'balanced' } });
+    await page.click('#continue');
+    await untilMode(page, ['play']);
+    const restAt = async (x, z, kind) => {
+      await goNear(page, x, z, 1.0);
+      const n = (await st(page)).nearest;
+      assert(n === 'rest-' + kind, `靠近${kind}時互動對象是 ${n}`);
+      await page.keyboard.press('Space');
+      return until(page, s => s.mode === 'play', `${kind}休息`);
+    };
+    const town = ['w-beach', 'w-gate'], forest = ['w-f1', 'w-f2', 'w-f3', 'w-f4', 'w-f5'], ruins = ['w-r1', 'w-r2', 'w-r3', 'w-r4'];
+    const afterWell = (await restAt(19.5, 14.5, 'well')).defeated;
+    const afterCamp = (await restAt(10.5, -9.5, 'camp')).defeated;
+    await context.close();
+    const detail = { afterWell, afterCamp };
+    assert(town.every(id => !afterWell.includes(id)), `水井休息後鎮上的影獸沒有全部重新出現：${JSON.stringify(detail)}`);
+    assert([...forest, ...ruins].every(id => afterWell.includes(id)), `水井休息讓別區的影獸也重新出現：${JSON.stringify(detail)}`);
+    assert(forest.every(id => !afterCamp.includes(id)) && ruins.every(id => afterCamp.includes(id)), `營火休息後的重生範圍不對：${JSON.stringify(detail)}`);
+    assert(errors.length === 0, errors.join('；'));
+    return detail;
+  });
+
+  await check('回歸：瀏覽器無法儲存時會提示，休息也不再說「進度已記錄」', async () => {
+    const { page, context } = await open({ init: [NO_STORAGE] });
+    // 同一個工作裡連著出兩則提示時，觀察器回呼只看得到最後一則，所以從每筆變動加入的文字節點收集
+    await page.evaluate(() => { const seen = window.__toasts = []; new MutationObserver(list => { for (const m of list) for (const n of m.addedNodes) seen.push(n.textContent); }).observe(document.getElementById('toast'), { childList: true }); });
+    await newGame(page);
+    await goNear(page, 19.5, 14.5, 1.0);
+    for (let i = 0; i < 2; i++) { // 休息兩次＝存檔失敗兩次，提示仍只能出現一次
+      await page.keyboard.press('Space');
+      await until(page, s => s.mode === 'play', '休息');
+      await page.waitForTimeout(300);
+    }
+    const toasts = await dom(page, () => window.__toasts);
+    await context.close();
+    assert(toasts.filter(t => t.includes('關閉頁面後進度會消失')).length === 1, `沒有（或不只一次）提示無法儲存：${JSON.stringify(toasts)}`);
+    assert(toasts.some(t => t.includes('但這個瀏覽器無法儲存進度')) && !toasts.some(t => t.includes('進度已記錄')), `休息的提示不對：${JSON.stringify(toasts)}`);
+    return toasts;
+  });
+
+  await check('回歸：結局畫面「重新開始」清不掉存檔時提示並留在原頁，不讀回舊進度', async () => {
+    const NO_REMOVE = () => { Storage.prototype.removeItem = () => { throw new DOMException('blocked', 'SecurityError'); }; };
+    const { page, context } = await open({ init: [NO_REMOVE], storage: { 'hd2d-save': LATE({ flags: { wolfKing: true, ruinsEntered: true }, defeated: ['b-wolfKing', 'b-starEater'], pos: [18.5, -28.3] }) } });
+    await page.click('#continue');
+    await until(page, s => s.mode === 'ended', '終章到結局畫面', 120000);
+    await page.evaluate(() => { window.__keep = 1; });
+    await page.click('#end-restart'); await page.waitForTimeout(200); await page.click('#end-restart');
+    await page.waitForTimeout(1500);
+    let info;
+    try { info = await dom(page, () => ({ kept: window.__keep === 1, toast: document.getElementById('toast').textContent, ending: !document.getElementById('ending').hidden })); } catch (e) { info = { kept: false, error: e.message }; }
+    await context.close();
+    assert(info.kept && info.toast.includes('無法清除進度'), `按兩次重新開始後：${JSON.stringify(info)}`);
+    return info;
+  });
+
+  await check('回歸：手機搖桿按住時，第二根手指按到左半邊不會搶走搖桿', async () => {
+    const { page, context, errors } = await open({ viewport: { width: 390, height: 844 }, mobile: true });
+    await newGame(page);
+    await page.evaluate(() => window.__hd2d.teleport(19.0, 16.5));
+    await settle(page);
+    const cdp = await page.context().newCDPSession(page);
+    const send = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
+    // 往東走（這一段是空地）；CDP 的 touchEnd 帶哪幾個點就放開哪幾個點
+    const A = (x) => ({ x, y: 650, id: 1 }), B = (y) => ({ x: 150, y, id: 2 });
+    await send('touchStart', [A(100)]); await send('touchMove', [A(160)]); // 第一指往右推
+    await page.waitForTimeout(300);
+    const a = (await st(page)).player;
+    await send('touchStart', [A(160), B(700)]); await send('touchMove', [A(160), B(770)]); // 第二指按下後往下拖
+    await page.waitForTimeout(500);
+    const b = (await st(page)).player;
+    await send('touchEnd', [B(770)]); await page.waitForTimeout(300); // 放開第二指，第一指還按著
+    const c = (await st(page)).player;
+    await send('touchEnd', []); await page.waitForTimeout(300);
+    const d = (await st(page)).player; await page.waitForTimeout(300); const e = (await st(page)).player;
+    const active = await dom(page, () => document.getElementById('stick').classList.contains('active'));
+    await context.close();
+    const detail = { a, b, c, d, e, active };
+    assert(b.x > a.x + 0.3 && Math.abs(b.z - a.z) < 0.1, `第二指按下後角色沒有照第一指的方向往右走：${JSON.stringify(detail)}`);
+    assert(c.x > b.x + 0.2, `放開第二指後第一指的搖桿失效：${JSON.stringify(detail)}`);
+    assert(Math.hypot(e.x - d.x, e.z - d.z) < 0.02 && !active, `全部放開後仍移動或搖桿仍亮：${JSON.stringify(detail)}`);
+    assert(errors.length === 0, errors.join('；'));
+    return detail;
+  });
+
+  await check('回歸：拿不到 pointer capture 時，滑鼠拖出搖桿區才放開，搖桿之後仍可使用', async () => {
+    const NO_CAPTURE = () => { Element.prototype.setPointerCapture = () => { throw new DOMException('no capture', 'NotFoundError'); }; };
+    const { page, context, errors } = await open({ viewport: { width: 390, height: 844 }, mobile: true, init: [NO_CAPTURE] });
+    await newGame(page);
+    await page.evaluate(() => window.__hd2d.teleport(19.0, 16.5));
+    await settle(page);
+    // 觸控有瀏覽器內建的隱含 capture，放開事件一定回到搖桿區；會卡住的是滑鼠（觸控筆電上用滑鼠按搖桿區、拖出去才放開）
+    await page.mouse.move(100, 650); await page.mouse.down(); await page.mouse.move(300, 650, { steps: 5 }); // 拖到右半邊（搖桿區外）才放開
+    await page.waitForTimeout(200);
+    await page.mouse.up(); await page.waitForTimeout(300);
+    const t = await touch(page);
+    const a = (await st(page)).player;
+    await t.start(100, 650); await t.move(100, 590); // 再按一次往上推
+    await page.waitForTimeout(500);
+    const b = (await st(page)).player;
+    await t.end();
+    await context.close();
+    assert(b.z < a.z - 0.3, `第二次按搖桿沒有反應：${JSON.stringify({ a, b })}`);
+    assert(errors.length === 0, errors.join('；'));
+    return { a, b };
+  });
+
+  await check('回歸：20 級時選單顯示「已達最高等級」，用完的道具不列出', async () => {
+    const save = JSON.parse(LATE({ pos: [19.0, 16.5] }));
+    save.items = { herb: 0, dew: 1, feather: 0 };
+    const { page, context, errors } = await open({ storage: { 'hd2d-save': JSON.stringify(save) } });
+    const readMenu = async () => {
+      await page.click('#continue');
+      await untilMode(page, ['play']);
+      await settle(page);
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(300);
+      return dom(page, () => document.getElementById('menu-party').textContent);
+    };
+    const first = await readMenu();
+    save.items = { herb: 0, dew: 0, feather: 0 };
+    await page.evaluate(v => localStorage.setItem('hd2d-save', v), JSON.stringify(save));
+    await page.reload({ waitUntil: 'load' });
+    await untilMode(page, ['title']);
+    const empty = await readMenu();
+    await context.close();
+    assert(first.includes('已達最高等級') && !first.includes('下一級還差'), `20 級的選單：${first}`);
+    assert(first.includes('星露 ×1') && !first.includes('×0'), `道具欄：${first}`);
+    assert(empty.includes('沒有道具') && !empty.includes('×0'), `道具全部用完時：${empty}`);
+    assert(errors.length === 0, errors.join('；'));
+    return { first, empty };
+  });
+
+  await check('回歸：Ctrl／Alt 組合鍵不會讓角色移動，也不會被遊戲攔下', async () => {
+    const { page, context, errors } = await fresh();
+    await page.evaluate(() => window.__hd2d.teleport(19.0, 16.5));
+    await settle(page);
+    await page.evaluate(() => { window.__prevented = []; addEventListener('keydown', e => { if (e.code === 'KeyD' || e.code === 'KeyE') window.__prevented.push(e.defaultPrevented); }); });
+    const a = (await st(page)).player;
+    for (const mod of ['Control', 'Alt']) {
+      await page.keyboard.down(mod); await page.keyboard.down('KeyD'); await page.waitForTimeout(400); await page.keyboard.up('KeyD'); await page.keyboard.up(mod);
+    }
+    await page.waitForTimeout(200);
+    const b = (await st(page)).player;
+    const prevented = await dom(page, () => window.__prevented);
+    await context.close();
+    assert(Math.hypot(b.x - a.x, b.z - a.z) < 0.02, `按組合鍵時角色移動了：${JSON.stringify({ a, b })}`);
+    assert(prevented.length > 0 && prevented.every(p => !p), `組合鍵被遊戲 preventDefault：${JSON.stringify(prevented)}`);
+    assert(errors.length === 0, errors.join('；'));
+    return { a, b, prevented };
+  });
+
+  await check('回歸：某一幀丟出例外時，遊戲繼續跑並提示一次', async () => {
+    const { page, context } = await fresh();
+    const f0 = (await st(page)).frames;
+    await page.evaluate(() => {
+      const g = WebGL2RenderingContext.prototype, original = g.drawElements;
+      let armed = true;
+      g.drawElements = function (...args) { if (armed) { armed = false; throw new Error('E2E 注入的單幀錯誤'); } return original.apply(this, args); };
+    });
+    await page.waitForTimeout(1500);
+    const s = await st(page);
+    const toast = await dom(page, () => document.getElementById('toast').textContent);
+    await context.close();
+    assert(s.frames > f0 + 30, `例外之後畫面停住：frames ${f0} → ${s.frames}`);
+    assert(s.calls > 20, `例外之後沒有繼續繪製：每幀 ${s.calls} 次`);
+    assert(toast.includes('發生錯誤'), `沒有提示：${toast}`);
+    return { f0, frames: s.frames, calls: s.calls, toast };
+  });
+
+  await check('回歸：顯示卡中斷時遊戲暫停、按鍵無效；恢復後收起說明並接著跑', async () => {
+    const { page, context } = await fresh();
+    await goNear(page, 17.5, 12.6, 1.0);
+    assert((await st(page)).nearest === 'sign', '沒有站到告示牌旁');
+    await page.evaluate(() => { window.__lose = document.getElementById('game').getContext('webgl2').getExtension('WEBGL_lose_context'); window.__lose.loseContext(); });
+    await page.waitForTimeout(500);
+    const p1 = (await st(page)).playTime; await page.waitForTimeout(1000); const p2 = (await st(page)).playTime;
+    await page.keyboard.press('Space'); await page.waitForTimeout(300);
+    const lost = { ...(await st(page)), overlay: await dom(page, () => !document.getElementById('error').hidden) };
+    await page.evaluate(() => window.__lose.restoreContext());
+    await page.waitForTimeout(2000);
+    const p3 = (await st(page)).playTime; await page.waitForTimeout(800);
+    const back = { ...(await st(page)), overlay: await dom(page, () => !document.getElementById('error').hidden) };
+    await shot(page, '28-顯示卡恢復後');
+    await context.close();
+    const detail = { p1, p2, lostMode: lost.mode, lostOverlay: lost.overlay, p3, p4: back.playTime, backOverlay: back.overlay, calls: back.calls };
+    assert(lost.overlay && p2 === p1, `中斷期間遊戲時間仍在跑或沒有說明：${JSON.stringify(detail)}`);
+    assert(lost.mode === 'play', `中斷期間按空白鍵仍觸發互動：${JSON.stringify(detail)}`);
+    assert(!back.overlay && back.playTime > p3 && back.calls > 20, `恢復後沒有接著跑：${JSON.stringify(detail)}`);
+    return detail;
+  });
+
+  await check('回歸：對話逐字顯示時，螢幕閱讀器的 aria-live 區域每句只更新一次整句', async () => {
+    const { page, context, errors } = await fresh();
+    await goNear(page, 17.5, 12.6, 1.0);
+    await page.evaluate(() => {
+      const counts = window.__liveCounts = {};
+      for (const el of document.querySelectorAll('[aria-live]')) {
+        if (el.id === 'toast') continue;
+        counts[el.id] = 0;
+        new MutationObserver(() => { counts[el.id]++; }).observe(el, { childList: true, characterData: true, subtree: true });
+      }
+    });
+    await page.keyboard.press('Space');
+    await untilMode(page, ['dialogue']);
+    await page.waitForTimeout(700); // 打字途中
+    const typing = await dom(page, () => ({ counts: { ...window.__liveCounts }, live: document.getElementById('dialogue-live')?.textContent ?? null, shown: document.getElementById('dialogue-text').textContent }));
+    await page.keyboard.press('Space'); // 顯示整句
+    await page.waitForTimeout(100);
+    const full = await dom(page, () => ({ live: document.getElementById('dialogue-live')?.textContent ?? null, shown: document.getElementById('dialogue-text').textContent, sectionLive: document.getElementById('dialogue').getAttribute('aria-live') }));
+    await context.close();
+    const detail = { typing, full };
+    assert(Object.values(typing.counts).every(n => n <= 3), `打字途中 aria-live 區域被改了太多次：${JSON.stringify(detail)}`);
+    assert(full.live && full.live.endsWith(full.shown) && typing.live === full.live, `aria-live 區域沒有在一開始就放整句：${JSON.stringify(detail)}`);
+    assert(errors.length === 0, errors.join('；'));
+    return detail;
+  });
+
+  await check('回歸：遊戲開著時切換「減少動態」立即生效：路燈與火焰不閃、螢火蟲停住、戰鬥畫面同步', async () => {
+    const { page, context, errors } = await fresh();
+    await page.evaluate(() => window.__hd2d.teleport(19.0, 16.5));
+    await settle(page);
+    const sample = async () => { const out = []; for (let i = 0; i < 10; i++) { out.push((await st(page)).motion); await page.waitForTimeout(90); } return out; };
+    const before = await sample();
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.waitForTimeout(300);
+    const after = await sample();
+    // 一開始就是減少動態（重新整理後開新遊戲）也要生效
+    await page.reload({ waitUntil: 'load' });
+    await untilMode(page, ['title']);
+    await newGame(page);
+    const reloaded = await sample();
+    await context.close();
+    const spread = (list, k) => Math.max(...list.map(m => m[k])) - Math.min(...list.map(m => m[k]));
+    const sum = list => ({ reduce: list[0].reduce, battle: list[0].battle, lantern: spread(list, 'lantern'), flame: spread(list, 'flame'), fly: spread(list, 'fly') });
+    const detail = { before: sum(before), after: sum(after), reloaded: sum(reloaded) };
+    assert(!before[0].reduce && detail.before.lantern > 0.01 && detail.before.fly > 0.3, `一般模式下燈火或螢火蟲沒有動（對照組）：${JSON.stringify(detail)}`);
+    assert(after[0].reduce && after[0].battle, `切換後遊戲或戰鬥畫面沒有收到減少動態：${JSON.stringify(detail)}`);
+    assert(detail.after.lantern === 0 && detail.after.flame === 0 && detail.after.fly === 0, `減少動態下燈火、火焰或螢火蟲仍在動：${JSON.stringify(detail)}`);
+    assert(detail.reloaded.reduce && detail.reloaded.battle && detail.reloaded.lantern === 0 && detail.reloaded.flame === 0 && detail.reloaded.fly === 0, `一開始就是減少動態時燈火或螢火蟲仍在動：${JSON.stringify(detail)}`);
+    assert(errors.length === 0, errors.join('；'));
+    return detail;
+  });
+
   // ---------- 說明視窗（放最後；修正前會在說明視窗後面進入戰鬥） ----------
   await check('回歸：從暫停選單開「操作說明」時遊戲應保持暫停（不應在說明視窗後面進入戰鬥）', async () => {
     const { page, context } = await fresh();

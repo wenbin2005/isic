@@ -15,11 +15,13 @@ const ui = {
   canvas: $('game'), loading: $('loading'), title: $('title'), hud: $('hud'), objective: $('objective-text'), gems: $('gems'),
   chapterLabel: $('chapter-label'), partyHud: $('party-hud'), menuParty: $('menu-party'),
   prompt: $('prompt'), promptKey: $('prompt-key'), promptText: $('prompt-text'), dialogue: $('dialogue'), speaker: $('speaker'),
-  text: $('dialogue-text'), toast: $('toast'), touch: $('touch'), stickZone: $('stick-zone'), stick: $('stick'), act: $('act-btn'),
+  text: $('dialogue-text'), live: $('dialogue-live'), toast: $('toast'), touch: $('touch'), stickZone: $('stick-zone'), stick: $('stick'), act: $('act-btn'),
   menu: $('menu'), help: $('help'), ending: $('ending'), endTime: $('end-time'), endLevel: $('end-level'), error: $('error'), quality: $('quality-select'), sound: $('sound-select'),
   battle: $('battle'), wipe: $('wipe'), chapter: $('chapter'), start: $('start'), cont: $('continue')
 };
-const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// 減少動態跟著系統設定即時變動（遊戲開著時改設定也要生效），地圖與戰鬥畫面在下面同步
+const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
+let reduceMotion = motionQuery.matches;
 const log = (...a) => console.info('[星燈港]', ...a);
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
@@ -54,6 +56,8 @@ const audio = createAudio();
 for (const type of ['pointerdown', 'pointerup', 'keydown', 'click']) addEventListener(type, audio.unlock, { capture: true, passive: true });
 
 const battleView = createBattleView({ renderer, post, root: ui.battle, reduceMotion, audio });
+world.setReduceMotion(reduceMotion);
+motionQuery.addEventListener('change', e => { reduceMotion = e.matches; battleView.reduceMotion = e.matches; world.setReduceMotion(e.matches); });
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -228,6 +232,8 @@ const CHESTS = [
   return { ...c, g, lid };
 });
 const REST = { well: [19.5, 14.5], camp: [10.5, -9.5], statue: [15.5, -23.5] };
+// 地圖分三區：北門以南是鎮上，古塔前的台階以北是古塔，中間是霧之森（配樂與休息重生都照這個分）
+const areaOf = z => z < -21.5 ? 'ruins' : z < -1 ? 'forest' : 'town';
 
 // ---------- 遊戲狀態 ----------
 const SAVE_KEY = 'hd2d-save';
@@ -267,10 +273,11 @@ function refreshHud() {
   }).join('');
 }
 function renderMenuParty() {
+  const owned = Object.entries(game.items).filter(([, n]) => n > 0); // 用完的道具不列出來
   ui.menuParty.innerHTML = game.party.map(r => {
-    const s = memberStats(r.id, r.lv);
-    return `<div class="row"><b>${MEMBERS[r.id].name}　Lv ${r.lv}</b><span>下一級還差 ${expToNext(r.lv) - r.exp}</span><span>HP ${r.hp} / ${s.hp}</span><span>SP ${r.sp} / ${s.sp}</span></div>`;
-  }).join('') + `<div class="items">道具：${Object.entries(game.items).map(([k, n]) => `${ITEMS[k].name} ×${n}`).join('、')}</div>`;
+    const s = memberStats(r.id, r.lv), next = r.lv >= MAX_LV ? '已達最高等級' : `下一級還差 ${expToNext(r.lv) - r.exp}`;
+    return `<div class="row"><b>${MEMBERS[r.id].name}　Lv ${r.lv}</b><span>${next}</span><span>HP ${r.hp} / ${s.hp}</span><span>SP ${r.sp} / ${s.sp}</span></div>`;
+  }).join('') + `<div class="items">道具：${owned.length ? owned.map(([k, n]) => `${ITEMS[k].name} ×${n}`).join('、') : '沒有道具'}</div>`;
 }
 
 let toastTimer;
@@ -285,13 +292,19 @@ function toast(msg) {
 }
 
 // ---------- 存檔（只存在這台裝置的瀏覽器） ----------
+let saveWarned = false;
 function saveGame() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       v: 1, flags: game.flags, found: game.found, frags: fragments.filter(f => f.got).map(f => f.id), party: game.party, items: game.items,
       revealed: game.revealed, defeated: [...game.defeated], chests: [...game.chests], pos: [+player.x.toFixed(2), +player.z.toFixed(2)], playTime: Math.round(game.playTime)
     }));
-  } catch { /* 無法儲存（例如私密瀏覽）時仍可遊玩 */ }
+    return true;
+  } catch {
+    // 無法儲存（例如私密瀏覽、空間已滿）時仍可遊玩，但提示一次，免得玩家以為進度已經記下來了
+    if (!saveWarned) { saveWarned = true; toast('這個瀏覽器無法儲存進度，關閉頁面後進度會消失'); }
+    return false;
+  }
 }
 function readSave() {
   try { const d = JSON.parse(localStorage.getItem(SAVE_KEY)); return validSave(d) ? d : null; } catch { return null; }
@@ -306,7 +319,7 @@ function validSave(d) {
     && Array.isArray(d.frags) && Array.isArray(d.defeated) && Array.isArray(d.chests)
     && Array.isArray(d.pos) && d.pos.length === 2 && d.pos.every(num);
 }
-function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch { /* 忽略 */ } }
+function clearSave() { try { localStorage.removeItem(SAVE_KEY); return true; } catch { return false; } }
 
 // 依劇情旗標擺好世界：北門、濃霧、古塔、燈塔、同伴與 NPC 位置
 function syncWorld() {
@@ -335,9 +348,9 @@ function applySave(d) {
 }
 
 // ---------- 對話 ----------
-const dlg = { lines: [], i: 0, shown: 0, onEnd: null };
+const dlg = { lines: [], i: 0, shown: 0, onEnd: null, spoken: null };
 function say(lines, onEnd) {
-  dlg.lines = lines; dlg.i = 0; dlg.shown = 0; dlg.onEnd = onEnd || null;
+  dlg.lines = lines; dlg.i = 0; dlg.shown = 0; dlg.onEnd = onEnd || null; dlg.spoken = null; ui.live.textContent = '';
   game.mode = 'dialogue';
   ui.dialogue.hidden = false; ui.prompt.hidden = true;
   renderLine();
@@ -348,6 +361,8 @@ function renderLine() {
   ui.speaker.hidden = !l.n;
   ui.text.textContent = l.t.slice(0, Math.floor(dlg.shown));
   ui.dialogue.classList.toggle('complete', dlg.shown >= l.t.length);
+  // 螢幕閱讀器每句只念一次整句；逐字打出的畫面文字不放在 aria-live 區域裡，免得念好幾次半句
+  if (dlg.spoken !== l) { dlg.spoken = l; ui.live.textContent = (l.n ? `${l.n}：` : '') + l.t; }
 }
 function advance() {
   const l = dlg.lines[dlg.i];
@@ -407,11 +422,18 @@ function rest(kind) {
   say({ well: S.restWell, camp: S.restCamp, statue: S.restStatue }[kind], () => {
     for (const r of game.party) { const s = memberStats(r.id, r.lv); r.hp = s.hp; r.sp = s.sp; }
     let back = 0;
-    for (const id of [...game.defeated]) if (id.startsWith('w-')) { game.defeated.delete(id); back++; const s = symbolById(id); s.x = s.home[0]; s.z = s.home[1]; }
+    // 只有同一區（鎮上／霧之森／古塔）被打倒的遊蕩影獸會重新出現，和說明寫的「附近」一致
+    const here = areaOf(REST[kind][1]);
+    for (const id of [...game.defeated]) {
+      const s = symbolById(id);
+      if (!id.startsWith('w-') || areaOf(s.home[1]) !== here) continue;
+      game.defeated.delete(id); back++; s.x = s.home[0]; s.z = s.home[1];
+    }
     game.grace = 2;
-    refreshHud(); saveGame();
+    refreshHud();
+    const saved = saveGame();
     audio.sfx('rest');
-    toast(back ? '全員完全回復。附近的影獸又出現了' : '全員完全回復，進度已記錄');
+    toast(!saved ? '全員完全回復，但這個瀏覽器無法儲存進度' : back ? '全員完全回復。附近的影獸又出現了' : '全員完全回復，進度已記錄');
   });
 }
 function openChest(c) {
@@ -562,7 +584,8 @@ const MOVE = { KeyW: [0, -1], ArrowUp: [0, -1], KeyS: [0, 1], ArrowDown: [0, 1],
 let escArmed = false; // 這次 Esc 是在遊玩中、沒有開著對話框時按下的，放開時才可以開選單
 addEventListener('keydown', e => {
   if (e.code === 'Escape') escArmed = game.mode === 'play' && !ui.menu.open && !ui.help.open;
-  if (ui.menu.open || ui.help.open || game.mode === 'battle') return;
+  if (ui.menu.open || ui.help.open || game.mode === 'battle' || glLost) return;
+  if (e.ctrlKey || e.altKey || e.metaKey) return; // Ctrl+S、Ctrl+D 這類組合鍵留給瀏覽器，角色也不跟著動
   if (MOVE[e.code]) { keys.add(e.code); e.preventDefault(); }
   if (['Space', 'Enter', 'KeyE', 'KeyZ'].includes(e.code) && !e.repeat) {
     if (game.mode === 'dialogue' || game.mode === 'play') { e.preventDefault(); action(); }
@@ -587,6 +610,7 @@ ui.act.addEventListener('click', e => { e.preventDefault(); action(); });
 // 虛擬搖桿：左半邊任意位置按下即為中心
 function showTouch() { if (!['title', 'loading', 'battle'].includes(game.mode)) ui.touch.hidden = false; document.body.classList.add('touching'); }
 ui.stickZone.addEventListener('pointerdown', e => {
+  if (stick.id !== null) return; // 已經有手指在操作搖桿時，第二根手指不能把它搶走
   stick.id = e.pointerId; stick.ox = e.clientX; stick.oy = e.clientY;
   try { ui.stickZone.setPointerCapture(e.pointerId); } catch { /* 少數瀏覽器不支援時，仍可靠 pointermove 操作 */ }
   ui.stick.style.transform = `translate(${e.clientX - 60}px, ${e.clientY - 60}px)`;
@@ -605,8 +629,9 @@ const endStick = e => {
   stick.id = null; stick.x = stick.z = 0;
   ui.stick.classList.remove('active'); ui.stick.firstElementChild.style.transform = '';
 };
-ui.stickZone.addEventListener('pointerup', endStick);
-ui.stickZone.addEventListener('pointercancel', endStick);
+// 放開聽在整個視窗：沒拿到 pointer capture 時（例如用滑鼠）移出搖桿區才放開，也要能清掉，否則上面那行會讓搖桿再也按不動
+addEventListener('pointerup', endStick);
+addEventListener('pointercancel', endStick);
 addEventListener('touchstart', showTouch, { once: true, passive: true });
 if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touching');
 
@@ -641,7 +666,8 @@ function confirmTwice(btn, text, run) {
     setTimeout(() => { btn.textContent = label; armed = 0; }, 4000);
   });
 }
-confirmTwice($('end-restart'), '再按一次，清除進度並重新開始', () => { clearSave(); location.reload(); });
+// 清不掉存檔時不要重新整理：重新整理後只會讀回舊進度，玩家還以為已經重新開始
+confirmTwice($('end-restart'), '再按一次，清除進度並重新開始', () => { if (clearSave()) location.reload(); else toast('無法清除進度：這個瀏覽器不允許修改儲存資料'); });
 
 const saved = readSave();
 if (saved) {
@@ -828,23 +854,30 @@ function areaTrack() {
   if (m === 'loading') return null;
   if (m === 'title' || m === 'ended') return 'title';
   if (cine.active) return null; // 點燈演出時讓位給點燈的音效
-  if (player.z < -21.5) return 'ruins';
-  if (player.z < -1) return 'forest';
+  const area = areaOf(player.z);
+  if (area !== 'town') return area;
   return game.flags.finished ? 'title' : 'town';
 }
 
 const timer = new THREE.Timer();
-let firstFrame = true, frames = 0;
+let firstFrame = true, frames = 0, frameErrorShown = false, glLost = false;
 function frame(now) {
+  requestAnimationFrame(frame); // 先排下一幀：這一幀丟例外，遊戲也不會永久停住
+  try { step(now); } catch (err) {
+    console.error(err);
+    if (!frameErrorShown) { frameErrorShown = true; toast('畫面更新時發生錯誤，若畫面停住請重新整理頁面'); }
+  }
+}
+function step(now) {
   timer.update(now);
   const dt = Math.min(timer.getDelta(), 0.1);
+  if (glLost) return; // 顯示卡中斷時整個遊戲暫停，免得看不到畫面時遊戲時間照跑、影獸照追
   renderer.info.reset();
   frames++;
   elapsed += dt;
   if (battleView.active) {
     battleView.update(dt);
     battleView.render(quality === 'high', elapsed);
-    requestAnimationFrame(frame);
     return;
   }
   audio.music(areaTrack());
@@ -886,13 +919,19 @@ function frame(now) {
     (saved ? ui.cont : ui.start).focus();
     log('第一幀完成', renderer.info.render);
   }
-  requestAnimationFrame(frame);
 }
 
 renderer.domElement.addEventListener('webglcontextlost', e => {
   e.preventDefault();
+  glLost = true;
   ui.error.hidden = false;
   ui.error.querySelector('p').textContent = '顯示卡暫時中斷了畫面。請重新整理頁面再試一次。';
+});
+// three.js 會在 context 恢復時重建 GPU 資源；恢復後收起說明、讓遊戲接著跑
+renderer.domElement.addEventListener('webglcontextrestored', () => {
+  glLost = false;
+  ui.error.hidden = true;
+  log('顯示卡恢復');
 });
 
 applyQuality(quality, qualityLocked ? '已儲存的偏好' : '預設');
@@ -907,7 +946,8 @@ window.__hd2d = {
     player: { x: +player.x.toFixed(2), z: +player.z.toFixed(2), y: +player.y.toFixed(2), dir: player.dir }, nearest: nearest?.id === 'rest' ? 'rest-' + nearest.kind : nearest?.id ?? null,
     lit: world.lighthouse.lit, calls: renderer.info.render.calls, frames, playTime: +game.playTime.toFixed(2),
     party: game.party.map(r => ({ id: r.id, lv: r.lv, exp: r.exp, hp: r.hp, sp: r.sp, maxHp: memberStats(r.id, r.lv).hp })), items: { ...game.items }, defeated: [...game.defeated], chests: [...game.chests],
-    battle: battleView.state(), audio: audio.state()
+    battle: battleView.state(), audio: audio.state(),
+    motion: { reduce: reduceMotion, battle: battleView.reduceMotion, ...world.motionInfo() }
   }),
   teleport(x, z) { player.x = x; player.z = z; player.y = world.groundAt(x, z); },
   battleAuto(v = true) { battleView.auto = v; },

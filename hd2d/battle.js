@@ -192,7 +192,8 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
   root.addEventListener('mousedown', e => { if (e.target.closest('button')) e.preventDefault(); }); // 點擊不搶焦點，避免之後按空白鍵重複觸發
 
   // ---------- 狀態 ----------
-  const view = { active: false, auto: false, timeScale: 1, battle: null };
+  // reduceMotion 放在 view 上，系統的減少動態設定改了，主程式會更新它
+  const view = { active: false, auto: false, timeScale: 1, battle: null, reduceMotion };
   let b = null, enc = null, recs = null, items = null, vis = new Map(), stage = null;
   let time = 0, shake = 0, tagMinY = null, layoutK = 1;
   const waits = [], tweens = [];
@@ -303,7 +304,7 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
     setTimeout(() => s.remove(), 1400);
   }
   function flashScreen(color = 'rgba(255,240,200,0.55)') {
-    if (reduceMotion) return;
+    if (view.reduceMotion) return;
     el.flash.style.background = color;
     el.flash.classList.remove('go'); void el.flash.offsetWidth; el.flash.classList.add('go');
   }
@@ -507,7 +508,7 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
         else if (ev.kind === 'heal' || ev.kind === 'item') { const v = vis.get(u); fx(v.mesh.position.x, v.h * 0.55, v.mesh.position.z, '#9affc0', { size: 1.6, dur: 0.4 }); await sleep(0.2); }
         else if (ev.kind === 'defend') { const v = vis.get(u); fx(v.mesh.position.x, v.h * 0.5, v.mesh.position.z, '#8ab8ff', { size: 2, dur: 0.5 }); pop(u, '防禦', 'info'); await sleep(0.3); }
         else if (ev.kind === 'escape') { for (const p of b.party) if (p.hp > 0) stepTo(p, 2.5); await sleep(0.35); }
-        if (ev.kind === 'enemyAll') { flashScreen('rgba(120,80,200,0.35)'); if (!reduceMotion) shake = 0.25; }
+        if (ev.kind === 'enemyAll') { flashScreen('rgba(120,80,200,0.35)'); if (!view.reduceMotion) shake = 0.25; }
         if (ev.bp) { const v = vis.get(u); fx(v.mesh.position.x, v.h * 0.5, v.mesh.position.z, '#ffd27a', { size: 1.2 + ev.bp * 0.25, dur: 0.4, intensity: 1.3 }); }
       } else if (ev.t === 'hit') {
         fxAt(ev.target, ev.type, ev.type === 'sword' || ev.type === 'dagger' || ev.type === 'staff' || !ev.type);
@@ -515,7 +516,7 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
         hitFlash(ev.target);
         pop(ev.target, ev.dmg, ev.weak ? 'weak' : ev.target.side === 'party' ? 'hurt' : '');
         if (ev.weak) pop(ev.target, '弱點', 'tag', -36);
-        if (ev.target.side === 'party' && !reduceMotion) shake = Math.max(shake, 0.12);
+        if (ev.target.side === 'party' && !view.reduceMotion) shake = Math.max(shake, 0.12);
         refresh();
         await sleep(ev.src?.side === 'party' ? 0.2 : 0.16);
       } else if (ev.t === 'reveal') {
@@ -553,7 +554,7 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
         refresh(); await sleep(0.25);
       } else if (ev.t === 'phase') {
         audio.sfx('phase');
-        flashScreen('rgba(150,90,255,0.5)'); if (!reduceMotion) shake = 0.5;
+        flashScreen('rgba(150,90,255,0.5)'); if (!view.reduceMotion) shake = 0.5;
         caption(ev.text, 2.4); refresh(); await sleep(1.3);
       } else if (ev.t === 'note') {
         caption(ev.text, 1.4); await sleep(0.4);
@@ -776,7 +777,7 @@ export function createBattleView({ renderer, post, root, reduceMotion, audio = {
     }
     const s = shake > 0 ? (shake -= dt, shake * 0.25) : 0;
     // 減少動態時鏡頭不搖擺，名牌也就固定不動，觸控點擊比較穩
-    camera.position.x = reduceMotion ? 0 : Math.sin(time * 0.25) * 0.3 + (s ? (Math.random() - 0.5) * s : 0);
+    camera.position.x = view.reduceMotion ? 0 : Math.sin(time * 0.25) * 0.3 + (s ? (Math.random() - 0.5) * s : 0);
     camera.lookAt(look);
   };
 
