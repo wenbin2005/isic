@@ -4,7 +4,7 @@ import { createWorld, SPRITE_TILT } from './world.js';
 import { PALETTES, makeCharacterTexture, setFrame } from './pixel.js';
 import { HD2DPost } from './post.js';
 import { createBattleView } from './battle.js';
-import { memberStats, expToNext } from './battle-core.js';
+import { memberStats, expToNext, MAX_LV } from './battle-core.js';
 import { ITEMS, MEMBERS } from './data.js';
 import { monsterMaterial } from './monsters.js';
 import { S, CHAPTERS } from './story.js';
@@ -294,7 +294,17 @@ function saveGame() {
   } catch { /* 無法儲存（例如私密瀏覽）時仍可遊玩 */ }
 }
 function readSave() {
-  try { const d = JSON.parse(localStorage.getItem(SAVE_KEY)); return d && d.v === 1 ? d : null; } catch { return null; }
+  try { const d = JSON.parse(localStorage.getItem(SAVE_KEY)); return validSave(d) ? d : null; } catch { return null; }
+}
+// 欄位不齊（手動改過、寫到一半、舊格式）的存檔當作沒有存檔，免得「繼續冒險」卡在半初始化
+function validSave(d) {
+  const num = n => Number.isFinite(n);
+  return !!d && d.v === 1 && !!d.flags && typeof d.flags === 'object' && num(d.found)
+    && Array.isArray(d.party) && d.party.length > 0
+    && d.party.every(r => r && MEMBERS[r.id] && Number.isInteger(r.lv) && r.lv >= 1 && r.lv <= MAX_LV && num(r.exp) && num(r.hp) && num(r.sp))
+    && !!d.items && typeof d.items === 'object' && Object.entries(d.items).every(([k, n]) => ITEMS[k] && num(n))
+    && Array.isArray(d.frags) && Array.isArray(d.defeated) && Array.isArray(d.chests)
+    && Array.isArray(d.pos) && d.pos.length === 2 && d.pos.every(num);
 }
 function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch { /* 忽略 */ } }
 
@@ -317,6 +327,8 @@ function applySave(d) {
   // 數值調整過的舊存檔，HP／SP 可能超過新的上限
   for (const r of game.party) { const s = memberStats(r.id, r.lv); r.hp = Math.min(r.hp, s.hp); r.sp = Math.min(r.sp, s.sp); }
   game.defeated = new Set(d.defeated); game.chests = new Set(d.chests); game.playTime = d.playTime || 0;
+  // 舊版在霧狼王戰後台詞中關頁留下的存檔：頭目已打倒、旗標卻沒設，補上才不會卡關
+  if (game.defeated.has('b-wolfKing')) game.flags.wolfKing = true;
   for (const f of fragments) if (d.frags.includes(f.id)) { f.got = true; f.g.visible = false; }
   syncWorld();
   player.place(d.pos[0], d.pos[1], 0);
@@ -476,11 +488,13 @@ async function encounter(s) {
   await wipe(false);
   game.mode = 'play';
   if (result !== 'win') return;
+  // 劇情旗標要和 defeated 一起存：戰後台詞播到一半關頁，讀檔後才不會頭目不見了、霧卻沒散
+  if (s.id === 'b-wolfKing') game.flags.wolfKing = true;
   saveGame();
   if (s.id.startsWith('g-')) toast('影獸消散了，星之碎片就在前方');
   if (s.id === 'b-wolfKing') {
     world.setMist(true);
-    say(S.wolfKingAfter, () => { game.flags.wolfKing = true; refreshHud(); toast('新的目標：前往星之古塔'); saveGame(); });
+    say(S.wolfKingAfter, () => { refreshHud(); toast('新的目標：前往星之古塔'); saveGame(); });
   }
   if (s.id === 'b-starEater') say(S.bossAfter, epilogue);
 }
@@ -545,7 +559,9 @@ function storyTriggers() {
 const keys = new Set();
 const stick = { x: 0, z: 0, id: null, ox: 0, oy: 0 };
 const MOVE = { KeyW: [0, -1], ArrowUp: [0, -1], KeyS: [0, 1], ArrowDown: [0, 1], KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0] };
+let escArmed = false; // 這次 Esc 是在遊玩中、沒有開著對話框時按下的，放開時才可以開選單
 addEventListener('keydown', e => {
+  if (e.code === 'Escape') escArmed = game.mode === 'play' && !ui.menu.open && !ui.help.open;
   if (ui.menu.open || ui.help.open || game.mode === 'battle') return;
   if (MOVE[e.code]) { keys.add(e.code); e.preventDefault(); }
   if (['Space', 'Enter', 'KeyE', 'KeyZ'].includes(e.code) && !e.repeat) {
@@ -555,7 +571,9 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => {
   keys.delete(e.code);
   // Esc 在放開時才開選單，避免同一個按鍵事件又把剛開的對話框關掉。
-  if (e.code === 'Escape' && game.mode === 'play' && !ui.menu.open && !ui.help.open) openMenu();
+  // 用 Esc 關掉選單時，對話框在按下時就關了，放開時要靠 escArmed 擋住，不然會馬上又開起來。
+  if (e.code === 'Escape' && escArmed && game.mode === 'play' && !ui.menu.open && !ui.help.open) openMenu();
+  if (e.code === 'Escape') escArmed = false;
 });
 addEventListener('blur', () => { keys.clear(); stick.x = stick.z = 0; });
 
@@ -600,7 +618,8 @@ function openMenu() {
   renderMenuParty();
   ui.menu.showModal();
 }
-ui.menu.addEventListener('close', () => { if (game.mode === 'paused') game.mode = 'play'; });
+// 從選單開操作說明時，選單的 close 事件比說明晚觸發；說明開著就維持暫停
+ui.menu.addEventListener('close', () => { if (game.mode === 'paused' && !ui.help.open) game.mode = 'play'; });
 $('menu-btn').addEventListener('click', openMenu);
 $('resume').addEventListener('click', () => ui.menu.close());
 $('menu-help').addEventListener('click', () => { ui.menu.close(); game.mode = 'paused'; ui.help.showModal(); });
@@ -643,6 +662,8 @@ function startGame(save) {
     game.grace = 2;
     refreshHud();
     camTarget.set(player.x, player.y + 0.6, player.z);
+    // 打倒熄星者後、終章開始前就關頁的存檔：直接接上終章，不讓玩家卡在已經沒有頭目的祭壇
+    if (game.defeated.has('b-starEater') && !game.flags.finished) { epilogue(); return; }
     toast(`歡迎回來。${CHAPTERS[chapter()].no}「${CHAPTERS[chapter()].title}」`);
     return;
   }
