@@ -202,24 +202,33 @@ async function main() {
   });
 
   await check('行走：四方向位移、放開即停、斜走不加速', async () => {
+    // 比速度不比位移：按住期間取樣兩次，速度＝位移 ÷ 遊戲時間差。按下、放開前後多跑或少跑的幾幀不算進去，幀率高低也不影響（位置和遊戲時間在同一幀更新）。
+    // 起點在廣場北側（18.5, 13.5），五個方向都有 6 格空地；舊起點（19.0, 16.5）往北走 1.22 格就撞到水井，多跑一幀就被擋住，直走變短、斜走就顯得比較快
     const moves = {};
     for (const [k, dx, dz] of [['KeyW', 0, -1], ['KeyS', 0, 1], ['KeyA', -1, 0], ['KeyD', 1, 0], [['KeyW', 'KeyD'], 0.707, -0.707]]) {
-      await P.evaluate(() => window.__hd2d.teleport(19.0, 16.5)); await settle(P);
-      const a = (await st(P)).player;
-      await hold(P, k, 0.35);
-      const b = (await st(P)).player;
-      await P.waitForTimeout(300);
+      const keys = [].concat(k);
+      await P.evaluate(() => window.__hd2d.teleport(18.5, 13.5)); await settle(P);
+      for (const key of keys) await P.keyboard.down(key);
+      const a = await st(P); // 所有按鍵都按下之後才取第一個樣本
+      await P.waitForFunction(t => window.__hd2d.state().playTime >= t + 1, a.playTime, { timeout: 60000 });
+      const b = await st(P); // 還按著時取第二個樣本
+      for (const key of keys) await P.keyboard.up(key);
       const c = (await st(P)).player;
-      const mx = b.x - a.x, mz = b.z - a.z, len = Math.hypot(mx, mz);
-      moves[[].concat(k).join('+')] = { dist: +len.toFixed(2), cos: +((mx * dx + mz * dz) / (len || 1)).toFixed(3), drift: +Math.hypot(c.x - b.x, c.z - b.z).toFixed(3) };
+      await P.waitForTimeout(300);
+      const d = (await st(P)).player;
+      assert(a.mode === 'play' && b.mode === 'play', `${keys.join('+')} 量測中離開遊玩：${a.mode}→${b.mode}`);
+      const mx = b.player.x - a.player.x, mz = b.player.z - a.player.z, len = Math.hypot(mx, mz), time = b.playTime - a.playTime;
+      moves[keys.join('+')] = { speed: +(len / time).toFixed(3), seconds: +time.toFixed(2), cos: +((mx * dx + mz * dz) / (len || 1)).toFixed(3), drift: +Math.hypot(d.x - c.x, d.z - c.z).toFixed(3) };
     }
     for (const [k, m] of Object.entries(moves)) {
       assert(m.cos > 0.95, `${k} 方向不對 ${JSON.stringify(m)}`);
-      assert(m.dist > 0.9 && m.dist < 1.5, `${k} 位移 ${m.dist}（預期約 1.19）`);
+      assert(m.speed > 3.2 && m.speed < 3.6, `${k} 速度 ${m.speed}（預期 3.4）`);
       assert(m.drift < 0.02, `${k} 放開後仍移動 ${m.drift}`);
     }
-    assert(moves['KeyW+KeyD'].dist <= moves.KeyW.dist * 1.08, '斜走比直走快');
-    return moves;
+    // 位置與遊戲時間只取到小數第二位，量 1 秒時每個速度最多差約 1.5%，兩個速度相比最多差約 3%
+    const ratio = moves['KeyW+KeyD'].speed / moves.KeyW.speed;
+    assert(ratio <= 1.05, `斜走比直走快：速度比 ${ratio.toFixed(3)}`);
+    return { ratio: +ratio.toFixed(3), ...moves };
   });
 
   await check('碰撞與地形：水井擋路、高台邊緣不能直接爬、石階可走上高台（落地後量高度）', async () => {
